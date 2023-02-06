@@ -1,0 +1,10 @@
+.ipynb_checkpoints/
+etok/
+logs/
+nohup.out
+wandb/
+__pycache__/
+.vscode/
+.neptune/
+.cometml-runs/
+

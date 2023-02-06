@@ -1,0 +1,4 @@
+nohup: ignoring input
+Global seed set to 42
+Using custom data configuration sd+hi-Latn+gu-ec215910f40315fe
+Reusing dataset mc4 (/nas/home/thawani/.cache/huggingface/datasets/mc4/sd+hi-Latn+gu-ec215910f40315fe/0.0.0/99acea4a740b4cc36e4a93a238c7de11b0ce341d65b7d37168b3b90fd64721d2)
