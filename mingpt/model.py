@@ -57,12 +57,11 @@ class CausalSelfAttention(nn.Module):
         self.resid_drop = nn.Dropout(config.resid_pdrop)
         # output projection
         self.proj = nn.Linear(config.n_embd, config.n_embd)
-        # causal mask to ensure that attention is only applied to the left in the input sequence
-        self.register_buffer("mask", torch.tril(torch.ones(config.block_size, config.block_size))
-                                     .view(1, 1, config.block_size, config.block_size))
+
         self.n_head = config.n_head
 
-    def forward(self, x, layer_past=None):
+    def forward(self, x, mask, layer_past=None):
+        mask = mask.unsqueeze(0).unsqueeze(0) # [1, 1, T, T]
         B, T, C = x.size()
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
@@ -70,9 +69,10 @@ class CausalSelfAttention(nn.Module):
         q = self.query(x).view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         v = self.value(x).view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
 
+        
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-        att = att.masked_fill(self.mask[:,:,:T,:T] == 0, float('-inf'))
+        att = att.masked_fill(mask == 0, float('-inf'))
         att = F.softmax(att, dim=-1)
         att = self.attn_drop(att)
         y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
@@ -97,11 +97,10 @@ class Block(nn.Module):
             nn.Dropout(config.resid_pdrop),
         )
 
-    def forward(self, x):
-        x = x + self.attn(self.ln1(x))
+    def forward(self, x, mask):
+        x = x + self.attn(self.ln1(x), mask)
         x = x + self.mlp(self.ln2(x))
         return x
-
 
 class eGPT(pl.LightningModule):
     """  end-to-end tokenized full GPT language model, with a context size of block_size """
