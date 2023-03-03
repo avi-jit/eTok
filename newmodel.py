@@ -107,6 +107,16 @@ class myGPT(pl.LightningModule):
         optimizer = torch.optim.AdamW(optim_groups, lr=self.hparams.learning_rate, betas=self.hparams.betas)
         return optimizer
 
+    def _make_mask(self, b, t, c):
+        mask = torch.zeros((t*c, t*c))
+        for i in range(t*c):
+            len = (i+1)%c if (i+1)%c else c
+            start = int(i/c)*c
+            for j in range(start, start+len):
+                mask[i][j] = 1
+        mask = torch.stack([mask for _ in range(b)])
+        return mask
+    
     def forward(self, idx, mask=None, eval=False):
         p = self.config.num_prefix
         assert idx.size()[1] <= self.config.block_size, "Cannot forward, model block size is exhausted."
@@ -118,15 +128,16 @@ class myGPT(pl.LightningModule):
             x = torch.cat((prefix.unsqueeze(0).unsqueeze(0).repeat(b,t,1),idx),-1)
             b, t, c = x.size()
             
-            token_embeddings = self.in_emb(x) # each index maps to a (learnable) vector
-            in_pe = self.in_pe[:, :c, :].unsqueeze(1) # each position maps to a (learnable) vector
-            token_embeddings = self.drop(token_embeddings + in_pe) # B,t,D. so far 1 word 1 embedding.
+#             token_embeddings = self.in_emb(x) # each index maps to a (learnable) vector
+#             in_pe = self.in_pe[:, :c, :].unsqueeze(1) # each position maps to a (learnable) vector
+#             token_embeddings = self.drop(token_embeddings + in_pe) # B,t,D. so far 1 word 1 embedding.
 
             mask = mask.reshape(-1) # b*t
             mask = torch.arange(c, device=mask.device).expand(len(mask), c) > mask.unsqueeze(1) # b*t,c
-            mask0 = torch.einsum('bi,bj->bij', mask, mask)
+            mask0 = torch.repeat_interleave(torch.einsum('bi,bj->bij', mask, mask), self.config.n_e2e_head, dim=0))
         
-            out = self.wordenc(token_embeddings.reshape(b*t,c,-1), mask=torch.repeat_interleave(mask0,self.config.n_e2e_head,dim=0))
+            #out = self.wordenc(token_embeddings.reshape(b*t,c,-1), mask=self.make_mask(b, t, c))
+            
             query = out[:,:p,:] # first few denote CLS per word. 2560,4,512 = b*t,p,d. earlier was b*t,d
             
             word_pe = self.word_pe[:, :t*p, :] # 1,128,512 = 1,t,d
