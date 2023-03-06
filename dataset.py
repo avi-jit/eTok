@@ -308,9 +308,9 @@ class myDataset(Dataset):
                 idxs = [[self.vocab[_] for _ in word] for word in chunk]
             #mask = torch.tensor([len(_)-1 for _ in x], dtype=torch.long)
             mask = [len(_) for _ in idxs]
-            x = torch.tensor([_ + [0]*(self.maxlen-len(_)) for _ in idxs[:-1]], dtype=torch.long) # W,Lc
+            x = idxs[:-1] # [t-1, sub_len]
             x_mask = torch.tensor(mask[:-1], dtype=torch.long)
-            y = torch.tensor([_ + [0]*(self.maxlen-len(_)) for _ in idxs[1:]], dtype=torch.long) # W,Lc
+            y = idxs[1:]  # [t-1, sub_len]
             y_mask = torch.tensor(mask[1:], dtype=torch.long)
             return x, y, x_mask, y_mask
         else: # chunk has block_size chars/bytes/subwords
