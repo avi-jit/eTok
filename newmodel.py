@@ -114,6 +114,18 @@ class myGPT(pl.LightningModule):
         optimizer = torch.optim.AdamW(optim_groups, lr=self.hparams.learning_rate, betas=self.hparams.betas)
         return optimizer
 
+    def _add_cls(self, idx):
+        B,t = idx.size()
+        idx_with_cls = []
+        for i in range(B):
+            head_indx_list = torch.where(idx[i].unsqueeze(1) == self.news)[0])
+            now_idx_with_cls = tolist(idx[i])
+            for head_indx in reversed(head_indx_list):
+                for offset in range(self.config.num_prefix):
+                    now_idx_with_cls.insert(head_indx, self.vocab_length+self.config.num_prefix-1-offset)
+            idx_with_cls.append(now_idx_with_cls)
+         return torch.nn.utils.rnn.pad_sequence(idx_with_cls, batch_first = True)
+    
     def _get_cls_indx(self, idx):
         cls_indx_list = []
         for seq in idx:
@@ -142,7 +154,7 @@ class myGPT(pl.LightningModule):
         B,_,_ = out.size()
         for i in range(B):
             cls_out.append(torch.tensor([ out[i][i:i+self.config.num_prefix, :] for i in cls_indx_list[i]]))
-        torch.nn.utils.rnn.pad_sequence(cls_out, batch_first = True)
+        cls_out = torch.nn.utils.rnn.pad_sequence(cls_out, batch_first = True)
         return cls_out
 
     def _get_canvas(self, token_embeddings, net, cls_indx_list):
@@ -158,7 +170,7 @@ class myGPT(pl.LightningModule):
                 cls_shift = cls_indx_list[:-1][cls_indx]
                 canvas[i, cls_shift:cls_shift+self.config.num_prefix,:] = net[i, cls_shift:cls_shift+self.config.num_prefix,:]
         
-        torch.nn.utils.rnn.pad_sequence(canvas, batch_first = True)
+        canvas = torch.nn.utils.rnn.pad_sequence(canvas, batch_first = True)
         return canvas
 
     def _get_out_word(self, out, cls_indx_list):
@@ -186,14 +198,15 @@ class myGPT(pl.LightningModule):
         
         # init encoding
         if p > 0:
+            idx = self._add_cls(idx)
             B, t = idx.size()
             token_embeddings = self.in_emb(idx)
             in_pe = self.in_pe[:, :t, :]
             token_embeddings = self.drop(token_embeddings + in_pe) # [B, t, embd]
             cls_indx_list = self._get_cls_indx(idx)
-            masks = self._make_mask(idx, cls_indx_list) #[B, t, t] (?) don't know how to do in batch
+            e2e_masks = self._make_mask(idx, cls_indx_list) #[B, t, t] (?) don't know how to do in batch
 
-            out = self.wordenc(token_embeddings, masks) #[B, t, embd]
+            out = self.wordenc(token_embeddings, e2e_masks) #[B, t, embd]
             query = self._extract_cls(out, cls_indx_list) # (!) query is a list of tensor [B, t_cls_pad, embd]
             
             _, tq, _ = query.size() #[B, t_cls_pad, embd]
