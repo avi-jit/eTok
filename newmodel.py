@@ -19,6 +19,7 @@ class myGPT(pl.LightningModule):
     def __init__(self,
                  #e2e_vocab_size=100,
                  num_prefix=0, # 0 for no compression
+                 cls_token='@'
                  weight_decay=0.1,
                  betas=(0.9, 0.95),
                  learning_rate=3e-4,
@@ -43,6 +44,7 @@ class myGPT(pl.LightningModule):
         # in lightning the "config" is hparams (for hyperparameters)
         self.config = self.hparams
         self.vocab_length = len(vocab)
+        self.cls_token = cls_token
         
         empt = {v for k, v in vocab.items() if k == ' '} # ' ' is paddingc
         self.empt = empt
