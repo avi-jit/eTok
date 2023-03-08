@@ -249,8 +249,6 @@ class myDataset(Dataset):
         chars.remove(' '); chars = [' '] + chars # index is 0
         words = list(set(self.data.split(' ')))
         print('data has %d characters, %d unique; %d words, %d unique' % (len(data), len(chars), len(self.data.split(' ')), len(words)))
-        if do_e2e or base == 'word':
-            self.data = self.data.split(' ')
         #self.vocab = [{},{}]    
         if base == 'char':
             self.vocab = { ch:i for i,ch in enumerate(chars) }
@@ -275,6 +273,13 @@ class myDataset(Dataset):
                 self.maxlen = max(len(self.vocab.tokenize(_)) for _ in words) # max number of subwords in a word
         else:
             raise NotImplemented # TODO: allow curbing vocab size with UNK
+            
+        if base == 'word':
+            self.data = self.data.split(' ')
+        if do_e2e and base == 'sub':
+            self.data = [pair for word in self.data.split(' ') for pair in ('@', word)] # @ is cls token (!)
+            self.data = [self.vocab(word, truncation=True, max_length=self.maxlen, add_special_tokens=False)['input_ids'] for word in self.data]
+            
         if vocab:
             self.vocab = vocab
             if base in ['char','word']:
@@ -298,7 +303,7 @@ class myDataset(Dataset):
         if not chunk: # can give space-sep (for e2e) or raw text too.
             i = np.random.randint(0, len(self.data) - (self.block_size + 1)) 
             # we're actually going to "cheat" and pick a spot in the dataset at random
-            chunk = self.data[i:round(i+k*self.block_size+1)]
+            chunk = self.data[i:round(i+k*self.block_size+1)] // block_size ~ word size
 
         #x = [[0]+[self.ctoi[_] for _ in word] for word in chunk[:-1]]
         if self.do_e2e: # chunk has block_size words
