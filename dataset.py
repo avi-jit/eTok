@@ -232,6 +232,7 @@ class eDataset_sub(Dataset):
 class myDataset(Dataset):
     def __init__(self, 
                  data, 
+                 cls_token = '@'
                  block_size, 
                  base='char', 
                  vocab_size=0, # if 0 then no limit else replace by UNK
@@ -239,6 +240,7 @@ class myDataset(Dataset):
                  vocab=None,
                  #maxlen=None,
                  ):
+        self.cls_token = cls_token
         text = data
         for remove in ['\n','<unk>','=', '@-@']:
             text = text.replace(remove,' ')
@@ -277,8 +279,8 @@ class myDataset(Dataset):
         if base == 'word':
             self.data = self.data.split(' ')
         if do_e2e and base == 'sub':
-            self.data = [pair for word in self.data.split(' ') for pair in ('@', word)] # @ is cls token (!)
-            self.data = [self.vocab(word, truncation=True, max_length=self.maxlen, add_special_tokens=False)['input_ids'] for word in self.data]
+            self.data = [pair for word in self.data.split(' ') for pair in (cls_token, word)] 
+            self.data = [self.vocab(word, truncation=True, max_length=self.maxlen, add_special_tokens=False, is_split_into_words=True)['input_ids'] for word in self.data]
             
         if vocab:
             self.vocab = vocab
@@ -304,18 +306,21 @@ class myDataset(Dataset):
             i = np.random.randint(0, len(self.data) - (self.block_size + 1)) 
             # we're actually going to "cheat" and pick a spot in the dataset at random
             chunk = self.data[i:round(i+k*self.block_size+1)] // block_size ~ word size
-
-        #x = [[0]+[self.ctoi[_] for _ in word] for word in chunk[:-1]]
+            
         if self.do_e2e: # chunk has block_size words
             if self.base in ['sub','byte']: # TODO: 0 may not be padding here?
-                idxs = [self.vocab(word, truncation=True, max_length=self.maxlen, add_special_tokens=False)['input_ids'] for word in chunk]
+                idxs = chunk
             else:    
                 idxs = [[self.vocab[_] for _ in word] for word in chunk]
             #mask = torch.tensor([len(_)-1 for _ in x], dtype=torch.long)
-            mask = [len(_) for _ in idxs]
-            x = torch.tensor([token for word in idxs[:-1] for token in word])
+
+            cls_heads = torch.where(idxs == self.vocab(self.cls_token))[0]
+            cls_heads_shifted = torch.roll(cls_heads, shifts=-1, dims=0)
+            cls_heads_shifted[-1] = idxs.size()[-1]
+            mask = cls_heads_shifted - cls_heads
+            x = torch.tensor(idxs[:-1])
             x_mask = torch.tensor(mask[:-1], dtype=torch.long)
-            y = torch.tensor([token for word in idxs[1:] for token in word])
+            y = torch.tensor(idxs[1:])
             y_mask = torch.tensor(mask[1:], dtype=torch.long)
             return x, y, x_mask, y_mask
         else: # chunk has block_size chars/bytes/subwords
