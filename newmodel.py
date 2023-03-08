@@ -118,7 +118,7 @@ class myGPT(pl.LightningModule):
         B,t = idx.size()
         idx_with_cls = []
         for i in range(B):
-            head_indx_list = torch.where(idx[i].unsqueeze(1) == self.news)[0])
+            head_indx_list = torch.where(idx[i].unsqueeze(1) == self.news)[0]
             now_idx_with_cls = tolist(idx[i])
             for head_indx in reversed(head_indx_list):
                 for offset in range(self.config.num_prefix):
