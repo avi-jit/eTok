@@ -38,7 +38,9 @@ class eDataset(Dataset):
         for remove in ['\n','<unk>','=', '@-@']:
             text = text.replace(remove,' ')
         text = re.sub(r"(:|,|;|\.|\n|!|'|--|\?)",r' \1 ',text)
-        text = re.sub(r' +',r' ',text).strip()
+        text = re.sub(r' +',r' ', text)
+
+        self.data = text.split(' ')
         chars = list(set(text))
         chars.remove(' '); #chars = [' '] + chars # index is 0
         self.data = text.split(' ')
@@ -232,8 +234,8 @@ class eDataset_sub(Dataset):
 class myDataset(Dataset):
     def __init__(self, 
                  data, 
-                 cls_token = '@'
                  block_size, 
+                 cls_token = None,
                  base='char', 
                  vocab_size=0, # if 0 then no limit else replace by UNK
                  do_e2e=False, 
@@ -246,7 +248,10 @@ class myDataset(Dataset):
             text = text.replace(remove,' ')
         text = re.sub(r"(-|{|}:|,|;|\.|\n|!|'|--|\?)",r' \1 ',text)
         text = re.sub(r'\b(?:[^\s]*[a-zA-Z])+[^\s]*\b', '', text)
-        self.data = re.sub(r' +',r' ',text).strip()
+        text = re.sub(r' +',r' ',text)
+        text = re.sub('\s{2,}', ' ', text)
+        text = re.sub(r' ', r' ' + cls_token + r' ', text) #(!)
+        self.data = text.split(' ')
         chars = list(set(text))
         chars.remove(' '); chars = [' '] + chars # index is 0
         words = list(set(self.data.split(' ')))
@@ -259,7 +264,6 @@ class myDataset(Dataset):
             self.vocab = { w:i for i,w in enumerate(words) }
             self.rev = {k:v for v,k in self.vocab.items()}
         elif base == 'sub':
-            #self.vocab = dict(bpe.vocab)
             self.vocab = AutoTokenizer.from_pretrained("gpt2")
         elif base == 'byte':
             self.vocab = AutoTokenizer.from_pretrained("google/byt5-small")  
@@ -279,8 +283,7 @@ class myDataset(Dataset):
         if base == 'word':
             self.data = self.data.split(' ')
         if do_e2e and base == 'sub':
-            self.data = [pair for word in self.data.split(' ') for pair in (cls_token, word)] 
-            self.data = [self.vocab(word, truncation=True, max_length=self.maxlen, add_special_tokens=False, is_split_into_words=True)['input_ids'] for word in self.data]
+            self.data = [self.vocab(self.data, truncation=True, max_length=self.maxlen, add_special_tokens=False, is_split_into_words=True)['input_ids']] #(!) pre tokenization
             
         if vocab:
             self.vocab = vocab
@@ -305,7 +308,7 @@ class myDataset(Dataset):
         if not chunk: # can give space-sep (for e2e) or raw text too.
             i = np.random.randint(0, len(self.data) - (self.block_size + 1)) 
             # we're actually going to "cheat" and pick a spot in the dataset at random
-            chunk = self.data[i:round(i+k*self.block_size+1)] // block_size ~ word size
+            chunk = self.data[i:round(i+k*self.block_size+1)] # block_size ~ word size
             
         if self.do_e2e: # chunk has block_size words
             if self.base in ['sub','byte']: # TODO: 0 may not be padding here?
