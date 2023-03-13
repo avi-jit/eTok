@@ -1,342 +1,238 @@
-from torch.utils.data import Dataset, DataLoader
+from ast import Not
+from dataset import myDataset
+import os
 import torch
+import torch.nn as nn
+from torch.nn import functional as F
+# make deterministic
+import pytorch_lightning as pl
+#from pytorch_lightning import seed_everything
+pl.seed_everything(42)
 import regex as re
+from tqdm import tqdm 
+import wandb
+#import neptune.new as neptune
 
-import random, math, collections
+import datasets
+from pytorch_lightning import Trainer
+#from pytorch_lightning.loggers import NeptuneLogger
+import comet_ml
+from pytorch_lightning.loggers import CometLogger
+from mingpt.lr_decay import LearningRateDecayCallback
+
+#from mingpt.model import eGPT, eGPT_pre, ByT5
+from newmodel import myGPT
+
+import collections
+import pickle
 import numpy as np
+import math
+from torch.utils.data import DataLoader
+import random
+import argparse
 
-from transformers import AutoTokenizer
-
-class CharDataset(Dataset):
-    def __init__(self, data, block_size):
-        chars = list(set(data))
-        #chars.remove(' '); chars = [' '] + chars # index is 0
-        data_size, vocab_size = len(data), len(chars)
-        print('data has %d characters, %d unique.' % (data_size, vocab_size))
-
-        self.stoi = { ch:i for i,ch in enumerate(chars) }
-        self.itos = { i:ch for i,ch in enumerate(chars) }
-        self.block_size = block_size
-        self.vocab_size = vocab_size
-        self.data = data
-
-    def __len__(self):
-        return math.ceil(len(self.data) / (self.block_size + 1))
-
-    def __getitem__(self, idx):
-        # we're actually going to "cheat" and pick a spot in the dataset at random
-        i = np.random.randint(0, len(self.data) - (self.block_size + 1))
-        chunk = self.data[i:i+self.block_size+1]
-        dix = [self.stoi[s] for s in chunk]
-        x = torch.tensor(dix[:-1], dtype=torch.long)
-        y = torch.tensor(dix[1:], dtype=torch.long)
-        return x, y
-
-class eDataset(Dataset):
-    def __init__(self, data, block_size, word_vocab_size=1000):
-        text = data
-        for remove in ['\n','<unk>','=', '@-@']:
-            text = text.replace(remove,' ')
-        text = re.sub(r"(:|,|;|\.|\n|!|'|--|\?)",r' \1 ',text)
-        text = re.sub(r' +',r' ', text)
-
-        self.data = text.split(' ')
-        chars = list(set(text))
-        chars.remove(' '); #chars = [' '] + chars # index is 0
-        self.data = text.split(' ')
-        words = list(set(self.data))
-        self.maxlen = max(len(_) for _ in words) # max number of chars in a word
-
-        print('data has %d characters, %d unique; %d words, %d unique' % (len(data), len(chars), len(self.data), len(words)))
-        #fwords = collections.Counter(self.data).most_common(word_vocab_size-1)  
-        #print(f'Top {word_vocab_size-1} words cover {100*sum([_[1] for _ in fwords])/len(self.data):.2f}% of all words')
-        #words = [_[0] for _ in fwords]
-
-        self.ctoi = { ch:i for i,ch in enumerate(chars) }
-        self.itoc = { i:ch for i,ch in enumerate(chars) }
-        #self.wtoi = collections.defaultdict(lambda w:0)
-        #self.itow = collections.defaultdict(lambda i:'UNK') 
+def main(
+        DATASET='trial', 
+        DEVICE=0, 
+        NUM_PREFIX=1, 
+        #block_size=128, 
+        block_size=256,
+        batch_size=8, 
+        base='word', 
+        do_e2e=False,
+        EPOCHS=1,
+        LOAD_CKPT=None,
+        debug=False,
+    ):
+    
+    if LOAD_CKPT:
+        model = myGPT.load_from_checkpoint(LOAD_CKPT, 
+            #block_size=32
+        )
+        block_size = model.config.block_size
+        model.to(DEVICE)
+        base = model.config.base
+        NUM_PREFIX = model.config.num_prefix
+        do_e2e = (NUM_PREFIX != 0)
+        #DATASET = model.config.dataset
+        print(f"loaded: {base=} {NUM_PREFIX=} {do_e2e=}")
+        vocab = model.config.vocab
+        #maxlen = model.config.maxlen
         
-        #for i,w in enumerate(words):
-        #    self.wtoi[w] = i+1
-        #    self.itow[i+1] = w
-        self.block_size = block_size
-        #self.wvocab_size = word_vocab_size
-        self.cvocab_size = len(chars)
+    CACHE_DIR="/nas/ckgfs/users/thawani/hf_cache/datasets" # default ~/.cache/huggingface/datasets
+    if DATASET == 'shakespeare': # one line of poem is roughly 50 characters
+        text = open(r'C:\Users\lenovo\OneDrive\Desktop\Project\eToK\eTok-Compressed_Dim_Version\tinyshake.txt', 'r').read() # don't worry we won't run out of file handles
+    elif DATASET == 'wiki':
+        text = ' '.join(datasets.load_dataset("wikitext", "wikitext-2-v1", split="train", cache_dir=CACHE_DIR)['text'])
+    elif DATASET == 'mc4':
+        langs = [
+            #'af', 'am', 'ar', 'az', 'be', 'bg', 'bg-Latn', 'bn', 'ca', 'ceb', 'co', 'cs', 'cy', 'da', 'de', 'el', 'el-Latn', 'en', 
+            # 'eo', 'es', 'et', 'eu', 'fa', 'fi', 'fil', 'fr', 'fy', 'ga', 'gd', 'gl', 'gu', 'ha', 'haw', 'hi', 'hi-Latn', 'hmn', 'ht', 'hu', 
+            # 'hy', 'id', 'ig', 'is', 'it', 'iw', 'ja', 'ja-Latn', 'jv', 'ka', 'kk', 'km', 'kn', 'ko', 'ku', 'ky', 'la', 'lb', 'lo', 'lt', 'lv', 
+            # 'mg', 'mi', 'mk', 'ml', 'mn', 'mr', 'ms', 'mt', 'my', 'ne', 'nl', 'no', 'ny', 'pa', 'pl', 'ps', 'pt', 'ro', 'ru', 'ru-Latn', 'sd', 
+            # 'si', 'sk', 'sl', 'sm', 'sn', 'so', 'sq', 'sr', 'st', 'su', 'sv', 'sw', 'ta', 'te', 'tg', 'th', 'tr', 'uk', 'und', 'ur', 'uz', 'vi', 
+            #'xh', 'yi', 'yo', 'zh', 'zh-Latn', 'zu' # these were first few experiments when langs not logged in wandb
+            #'ar','hi','sd',
+            'sd','hi-Latn','gu',
+        ]
+        #text = ' '.join(datasets.load_dataset("mc4", languages=langs, split="train", )['text'][:100_000])
+        text = ' '.join(random.sample(datasets.load_dataset("mc4", languages=langs, split="train", cache_dir=CACHE_DIR)['text'], 40_000))
+    elif DATASET == 'trial':
+        text = "the quick brown fox jumps over the lazy dog "*1000
+    elif DATASET == 'indic-ta': # 21,546,553 characters, 974 unique; 9,463,844 words, 973 unique. maxlen 3
+        if False:
+            lang = 'indic-ta'
+            ds = []
+            for i,row in tqdm(enumerate(datasets.load_dataset(f"bigscience-data/roots_{lang}_wikipedia", 
+                split="train", streaming=True, use_auth_token=True).shuffle(seed=42, buffer_size=1_000))):
+                if i == 10_000:
+                    break
+                ds.append(row['text'])
+            #pickle.dump(' '.join(ds), open(f"roots_{lang}_wiki.pkl", 'wb')) 92040 characters, 101 unique; 11131 words, 1295 unique
+        text = pickle.load(open('/nas/home/thawani/etok/roots_indic-ta_wiki.pkl','rb'))
+    elif DATASET == 'indic-hi': # data has 16,666,528 characters, 1725 unique; 3137071 words, 209,167 unique. maxlen 185
+        text = pickle.load(open('/nas/home/thawani/etok/roots_indic-hi_wiki.pkl','rb'))
+    else:
+        print(f"unknown dataset: {DATASET}")
+        return
+        #raise NotImplementedError
+    if debug:
+        text = text[:10_000]
+    if LOAD_CKPT:
+        full_dataset = myDataset(text, block_size=block_size, base=base, do_e2e=do_e2e, vocab=vocab,)
+    else:
+        full_dataset = myDataset(text, block_size=block_size, base=base, do_e2e=do_e2e)
 
-    def __len__(self):
-        return math.ceil(len(self.data) / (self.block_size + 1))
+    # use 20% of training data for validation
+    train_set_size = int(len(full_dataset) * 0.8)
+    valid_set_size = len(full_dataset) - train_set_size
 
-    def __getitem__(self, idx):
-        # we're actually going to "cheat" and pick a spot in the dataset at random
-        i = np.random.randint(0, len(self.data) - (self.block_size + 1))
-        chunk = self.data[i:i+self.block_size+1]
+    # split the train set into two
+    #seed = torch.Generator().manual_seed(42)
+    train_set, val_set = torch.utils.data.random_split(full_dataset, [train_set_size, valid_set_size])
 
-        idxs = [[0]+[self.ctoi[_] for _ in word] for word in chunk]
-        mask = torch.tensor([len(_)-1 for _ in x], dtype=torch.long)
-        x = torch.tensor([_ + [0]*(self.maxlen+1-len(_)) for _ in idxs[:-1]], dtype=torch.long) # W,Lc
-        y = torch.tensor([self.wtoi.get(_,0) for _ in chunk[1:]], dtype=torch.long) # W
-        return x, y, mask
+    #train_loader = DataLoader(train_dataset, batch_size=20, num_workers=16)
+    train_loader = DataLoader(train_set, batch_size=batch_size, num_workers=16)
+    val_loader = DataLoader(val_set, batch_size=batch_size, num_workers=16)
 
-class eDataset_nat(Dataset):
-    def __init__(self, data, block_size, word_vocab_size=None):
-        text = data
-        for remove in ['\n','<unk>','=', '@-@']:
-            text = text.replace(remove,' ')
-        text = re.sub(r"(:|,|;|\.|\n|!|'|--|\?)",r' \1 ',text)
-        text = re.sub(r' +',r' ',text).strip()
-        self.data = text.split(' ')
-        chars = list(set(text))
-        chars.remove(' '); chars = [' '] + chars # index is 0
-        self.data = [_ if len(_)<=9 else "@" for _ in self.data] # removes 4.6% tokens
-        self.bigram = self.get_bigram()
-        print(f"{len(self.bigram)=}")
-        words = list(set(self.data))
-        self.maxlen = max(len(_) for _ in words) # max number of chars in a word
-        print(f"{self.maxlen=}")
-
-        print('data has %d characters, %d unique; %d words, %d unique' % (len(data), len(chars), len(self.data), len(words)))
-        self.ctoi = { ch:i for i,ch in enumerate(chars) }
-        self.itoc = { i:ch for i,ch in enumerate(chars) }
+    '''neptune_logger = NeptuneLogger(
+        project="jaunts/etok",
+        api_key=os.environ["NEPTUNE_API_TOKEN"],
+        log_model_checkpoints=False,
+        #name=f"{DATASET} {'-'.join(langs)} {model_type}{model.config.num_prefix} {base} {output_type} {batch_size}bs {block_size}bl"
+    )'''   
+    logger = pl.loggers.WandbLogger(project="etok", save_dir='/nas/ckgfs/users/thawani/etok/')
+    #wandb.run.name = f"{DATASET} {'-'.join(langs)} {model_type}{model.config.num_prefix} {base} {output_type} {batch_size}bs {block_size}bl {'-'.join(wandb.run.name.split('-')[:2])}"
+    wandb.run.name = f"{'debug_' if debug else ''}{NUM_PREFIX if do_e2e else ''}_{base}_{DATASET}_{logger.experiment.name}_{EPOCHS}ep"
+    #logger.log_hyperparams(params=model.config)
+    # logger = CometLogger(api_key=os.environ["COMET_API_KEY"],project_name="etok")
+    # logger.experiment.set_name(f"{'debug_' if debug else ''}{NUM_PREFIX if do_e2e else ''}_{base}_{DATASET}_{logger.experiment.name}_{EPOCHS}ep")
+    # logger.experiment.log_parameter("dataset", DATASET)
+    # with logger.experiment.train():
+    #     logger.experiment.log_parameter("size", train_set_size)
+    # with logger.experiment.validate():
+    #     logger.experiment.log_parameter("size", valid_set_size)
         
-        if word_vocab_size:
-            fwords = collections.Counter(self.data).most_common(word_vocab_size-1)  
-            print(f'Top {word_vocab_size-1} words cover {100*sum([_[1] for _ in fwords])/len(self.data):.2f}% of all words')
-            words = [_[0] for _ in fwords]
-            self.wtoi = collections.defaultdict(lambda w:0)
-            self.itow = collections.defaultdict(lambda i:'UNK') 
-            for i,w in enumerate(words):
-                self.wtoi[w] = i+1
-                self.itow[i+1] = w
-            self.wtoi = dict(self.wtoi)
-            self.itow = dict(self.itow)
-            self.wvocab_size = word_vocab_size
-        else:
-            self.itow = None
-            self.wtoi = None
-            self.wvocab_size = None
-        self.block_size = block_size
-        self.cvocab_size = len(chars)
+    if not full_dataset.do_e2e:
+        NUM_PREFIX=0
+    if not LOAD_CKPT:
+        model = myGPT(
+            #in_vocab_size=full_dataset.in_vocab_size,
+            #out_vocab_size=full_dataset.out_vocab_size,
+            block_size=full_dataset.block_size,
+            n_layer=8, 
+            n_head=8, 
+            n_embd=512, 
+            #e2e_vocab_size=10,
+            learning_rate=1e-4,
+            vocab=full_dataset.vocab,
+            n_e2e_layer=2,
+            base=full_dataset.base,
+            num_prefix=NUM_PREFIX,
+            canvas_size=full_dataset.maxlen,
+        )
 
-    def get_bigram(self):
-        bigram = collections.defaultdict(lambda: 0)
-        for w,f in collections.Counter(self.data).most_common():
-            w += " "*(10-len(w))
-            bigram[('<bos>',w[0])] += f
-            for i,c in enumerate(w[:-1]):
-                bigram[(c,w[i+1])] += f
-        return dict(bigram)
-
-    def __len__(self):
-        return math.ceil(len(self.data) / (self.block_size + 1))
-
-    def __getitem__(self, idx):
-        # we're actually going to "cheat" and pick a spot in the dataset at random
-        i = np.random.randint(0, len(self.data) - (self.block_size + 1))
-        chunk = self.data[i:i+self.block_size+1]
-
-        #x = [[0]+[self.ctoi[_] for _ in word] for word in chunk[:-1]]
+        # scheduler
+        lr_decay = LearningRateDecayCallback(learning_rate=1e-4, warmup_tokens=512*20,
+                                            final_tokens=00*len(train_set)*block_size)
         
-        idxs = [[self.ctoi[_] for _ in word] for word in chunk]
-        #mask = torch.tensor([len(_)-1 for _ in x], dtype=torch.long)
-        mask = [len(_) for _ in idxs]
-        x = torch.tensor([_ + [0]*(self.maxlen+1-len(_)) for _ in idxs[:-1]], dtype=torch.long) # W,Lc
-        x_mask = torch.tensor(mask[:-1], dtype=torch.long)
-        if self.wvocab_size:
-            y = torch.tensor([self.wtoi.get(_,0) for _ in chunk[1:]], dtype=torch.long) # W
-            return x, y, x_mask
-        else:
-            y = torch.tensor([_ + [0]*(self.maxlen+1-len(_)) for _ in idxs[1:]], dtype=torch.long) # W,Lc
-            y_mask = torch.tensor(mask[1:], dtype=torch.long)
-            return x, y, x_mask, y_mask
+        trainer = Trainer(#accelerator="cpu",
+                        profiler="simple",
+                        accelerator="gpu", devices=[DEVICE], 
+                        precision=16, 
+                        max_epochs=EPOCHS,
+                        gradient_clip_val=1.0, 
+                        callbacks=[lr_decay], 
+                        #progress_bar_refresh_rate=1, 
+                        #row_log_interval=1,
+                        #log_every_n_steps=15,
+                        logger=logger,
+                        val_check_interval=0.25,
+                        default_root_dir="/nas/ckgfs/users/thawani/etok/checkpoints/",
+                        )
+        #trainer.fit(model, train_loader)
+        #model.hparams.itoc = None
+        #trainer.model.hparams.values()
+        trainer.fit(model, train_loader, val_loader)
+    else:   
+        model.eval()
+        logger.experiment.set_name(f"eval_{logger.experiment.name}")
+        with torch.no_grad():
+            trainer = Trainer(#accelerator="cpu",
+                            profiler="simple",
+                            accelerator="gpu", devices=[DEVICE], 
+                            #precision=16, 
+                            max_epochs=1,
+                            gradient_clip_val=1.0, 
+                            logger=logger,
+                            val_check_interval=0.25,
+                            default_root_dir="/nas/ckgfs/users/thawani/etok/checkpoints/",
+                            )
+            trainer.validate(model=model, dataloaders=[val_loader])
+               
+#main(DATASET='shakespeare', DEVICE=1, NUM_PREFIX=4, base='byte', do_e2e=True, EPOCHS=1, debug=True)
 
-class eDataset_char(Dataset):
-    def __init__(self, data, block_size, **kwargs): # here block size is the number of chars
-        text = data
-        for remove in ['\n','<unk>','=', '@-@']:
-            text = text.replace(remove,' ')
-        text = re.sub(r"(:|,|;|\.|\n|!|'|--|\?)",r' \1 ',text)
-        text = re.sub(r' +',r' ',text).strip()
-        self.data = text.split(' ')
-        chars = list(set(text))
-        chars.remove(' '); chars = [' '] + chars # index is 0
-        self.data = [_ if len(_)<=9 else "@" for _ in self.data] # removes 4.6% tokens
-        words = list(set(self.data))
-        self.maxlen = max(len(_) for _ in words) # max number of chars in a word
-        print(f"{self.maxlen=}")
-        self.data = ' '.join(self.data)
+# for base in ['byte','char','sub','word']:
+#     for e2e in [True, False]:
+#         for dataset in ['indic-hi']:
+#             if base == 'word' and e2e:
+#                 continue
+#             print(f"{'-'*20} {dataset=} {base=} {e2e=} {'-'*20}")
+#             main(DATASET=dataset, DEVICE=1, NUM_PREFIX=4, base=base, do_e2e=e2e, EPOCHS=1, debug=True, block_size=128+64, batch_size=2, )
 
-        print('data has %d characters, %d unique; %d words, %d unique' % (len(data), len(chars), len(self.data), len(words)))
-        self.ctoi = { ch:i for i,ch in enumerate(chars) }
-        self.itoc = { i:ch for i,ch in enumerate(chars) }
-        self.wtoi = None
-        self.itow = None
-        self.block_size = block_size
-        self.cvocab_size = len(chars)
+#main(LOAD_CKPT="/nas/ckgfs/users/thawani/etok/checkpoints/etok/21e283a7b7f343eab22de2854a6a0fa8/checkpoints/epoch=49-step=9800.ckpt", DEVICE=2, DATASET="shakespeare") # 4sub
+#main(LOAD_CKPT="/nas/ckgfs/users/thawani/etok/checkpoints/etok/bbab251fa3474fe187f17fca80aeb10d/checkpoints/epoch=49-step=9800.ckpt", DEVICE=2, DATASET="shakespeare") # 4char
+#main(LOAD_CKPT="/nas/ckgfs/users/thawani/etok/checkpoints/etok/2dda188ade9d43a09ec4a8a3d08a0a0f/checkpoints/epoch=49-step=9800.ckpt", DEVICE=2, DATASET="shakespeare") # 4byte
 
-    def __len__(self):
-        return math.ceil(len(self.data) / (self.block_size + 1))
+#main(LOAD_CKPT="/nas/ckgfs/users/thawani/etok/checkpoints/etok/c82ecff627ba48b99fe338c5c54675b0/checkpoints/epoch=49-step=9800.ckpt", DEVICE=2, DATASET="shakespeare") # word - eval exists
 
-    def __getitem__(self, idx):
-        # we're actually going to "cheat" and pick a spot in the dataset at random
-        i = np.random.randint(0, len(self.data) - (self.block_size + 1))
-        chunk = self.data[i:i+self.block_size+1]
-        #idxs = [[self.ctoi[_] for _ in word] for word in chunk]
-        idxs = [self.ctoi[_] for _ in chunk]
-        x = torch.tensor(idxs[:-1], dtype=torch.long)
-        y = torch.tensor(idxs[1:], dtype=torch.long)
-        return x, y
+# _sub, _char, _byte: word 0
+#main(LOAD_CKPT="/nas/ckgfs/users/thawani/etok/checkpoints/etok/23fb899d588d450e8bc8a7fc4e83496a/checkpoints/epoch=49-step=44898.ckpt", DEVICE=3, DATASET="shakespeare") # _sub
+#main(LOAD_CKPT="/nas/ckgfs/users/thawani/etok/checkpoints/etok/deed7582996b4c11814314c71a363498/checkpoints/epoch=49-step=44898.ckpt", DEVICE=3, DATASET="shakespeare") # _char
+#main(LOAD_CKPT="/nas/ckgfs/users/thawani/etok/checkpoints/etok/18970dc331f24b999edbd5d17a33f555/checkpoints/epoch=49-step=44898.ckpt", DEVICE=3, DATASET="shakespeare") # _byte
 
-class eDataset_sub(Dataset):
-    def __init__(self, data, block_size, **kwargs): # here block size is the number of chars
-        text = data
-        for remove in ['\n','<unk>','=', '@-@']:
-            text = text.replace(remove,' ')
-        text = re.sub(r"(:|,|;|\.|\n|!|'|--|\?)",r' \1 ',text)
-        text = re.sub(r' +',r' ',text).strip()
-        self.data = text.split(' ')
-        chars = list(set(text))
-        chars.remove(' '); chars = [' '] + chars # index is 0
-        self.data = [_ if len(_)<=9 else "@" for _ in self.data] # removes 4.6% tokens
-        words = list(set(self.data))
-        self.maxlen = max(len(_) for _ in words) # max number of chars in a word
-        print(f"{self.maxlen=}")
-        self.data = ' '.join(self.data)
-        self.vocab = bpe
-        #self.data = self.vocab.tokenize(' '.join(self.data)) # TOKENIZERS_PARALLELISM=false 
+# old
+#main(LOAD_CKPT="/nas/ckgfs/users/thawani/etok/checkpoints/etok/8c25cc8dcdc04bf49aad54a77f8046f4/checkpoints/epoch=49-step=9800.ckpt", DEVICE=3, DATASET="shakespeare") # sub
+#main(LOAD_CKPT="/nas/ckgfs/users/thawani/etok/checkpoints/etok/cbf7310be4a24176b4d8cd28879171f4/checkpoints/epoch=49-step=9800.ckpt", DEVICE=2, DATASET="shakespeare") # 4byte
 
-        print('data has %d characters, %d unique; %d words, %d unique' % (len(data), len(chars), len(self.data), len(words)))
-        
-        self.ctoi = { ch:i for i,ch in enumerate(chars) }
-        self.itoc = { i:ch for i,ch in enumerate(chars) }
-        self.wtoi = None
-        self.itow = None
-        self.block_size = block_size
-        self.cvocab_size = len(self.vocab)
 
-    def __len__(self):
-        return math.ceil(len(self.data) / (self.block_size + 1))
-
-    def __getitem__(self, idx):
-        # we're actually going to "cheat" and pick a spot in the dataset at random
-        i = np.random.randint(0, len(self.data) - (self.block_size + 1))
-        chunk = self.data[i:i+5*self.block_size+1] # 4x chars to cast a wide net
-        idxs = self.vocab(chunk, truncation=True, max_length=self.block_size+1)['input_ids']
-        if len(idxs) != self.block_size + 1:
-            return self.__getitem__(idx)
-        #idxs = [[self.ctoi[_] for _ in word] for word in chunk]
-        #idxs = [self.ctoi[_] for _ in chunk]
-        #idxs = self.vocab.convert_tokens_to_ids(chunk)
-        x = torch.tensor(idxs[:-1], dtype=torch.long)
-        y = torch.tensor(idxs[1:], dtype=torch.long)
-        return x, y
-
-class myDataset(Dataset):
-    def __init__(self, 
-                 data, 
-                 block_size, 
-                 cls_token = None,
-                 base='char', 
-                 vocab_size=0, # if 0 then no limit else replace by UNK
-                 do_e2e=False, 
-                 vocab=None,
-                 #maxlen=None,
-                 ):
-        self.cls_token = cls_token
-        text = data
-        for remove in ['\n','<unk>','=', '@-@']:
-            text = text.replace(remove,' ')
-        text = re.sub(r"(-|{|}:|,|;|\.|\n|!|'|--|\?)",r' \1 ',text)
-        text = re.sub(r'\b(?:[^\s]*[a-zA-Z])+[^\s]*\b', '', text)
-        text = re.sub(r' +',r' ',text)
-        text = re.sub('\s{2,}', ' ', text)
-        text = re.sub(r' ', r' ' + cls_token + r' ', text) #(!)
-        self.data = text.split(' ')
-        chars = list(set(text))
-        chars.remove(' '); chars = [' '] + chars # index is 0
-        words = list(set(self.data.split(' ')))
-        print('data has %d characters, %d unique; %d words, %d unique' % (len(data), len(chars), len(self.data.split(' ')), len(words)))
-        #self.vocab = [{},{}]    
-        if base == 'char':
-            self.vocab = { ch:i for i,ch in enumerate(chars) }
-            self.rev = {k:v for v,k in self.vocab.items()}
-        elif base == 'word':
-            self.vocab = { w:i for i,w in enumerate(words) }
-            self.rev = {k:v for v,k in self.vocab.items()}
-        elif base == 'sub':
-            self.vocab = AutoTokenizer.from_pretrained("gpt2")
-        elif base == 'byte':
-            self.vocab = AutoTokenizer.from_pretrained("google/byt5-small")  
-        if vocab_size == 0:
-            if base == 'char':
-                vocab_size = len(chars)
-                self.maxlen = max(len(_) for _ in words) # max number of chars in a word
-            elif base == 'word':
-                vocab_size = len(words)
-                self.maxlen = 10
-            elif base in ['sub','byte']:
-                vocab_size = len(self.vocab)
-                self.maxlen = max(len(self.vocab.tokenize(_)) for _ in words) # max number of subwords in a word
-        else:
-            raise NotImplemented # TODO: allow curbing vocab size with UNK
-            
-        if base == 'word':
-            self.data = self.data.split(' ')
-        if do_e2e and base == 'sub':
-            self.data = [self.vocab(self.data, truncation=True, max_length=self.maxlen, add_special_tokens=False, is_split_into_words=True)['input_ids']] #(!) pre tokenization
-            
-        if vocab:
-            self.vocab = vocab
-            if base in ['char','word']:
-                self.rev = {k:v for v,k in self.vocab.items()}
-            #self.maxlen = maxlen
-        print(f"{self.maxlen=}")
-        
-        self.block_size = block_size
-        self.do_e2e = do_e2e
-        self.base = base
-        
-            
-
-    def __len__(self):
-        return math.ceil(len(self.data) / (self.block_size + 1))
-
-    def __getitem__(self, idx, chunk=None, recursion=0):
-        k = 1
-        if self.base == 'sub' and not self.do_e2e:
-            k = 5
-        if not chunk: # can give space-sep (for e2e) or raw text too.
-            i = np.random.randint(0, len(self.data) - (self.block_size + 1)) 
-            # we're actually going to "cheat" and pick a spot in the dataset at random
-            chunk = self.data[i:round(i+k*self.block_size+1)] # block_size ~ word size
-            
-        if self.do_e2e: # chunk has block_size words
-            if self.base in ['sub','byte']: # TODO: 0 may not be padding here?
-                idxs = chunk
-            else:    
-                idxs = [[self.vocab[_] for _ in word] for word in chunk]
-            #mask = torch.tensor([len(_)-1 for _ in x], dtype=torch.long)
-
-            cls_heads = torch.where(idxs == self.vocab(self.cls_token))[0]
-            cls_heads_shifted = torch.roll(cls_heads, shifts=-1, dims=0)
-            cls_heads_shifted[-1] = idxs.size()[-1]
-            mask = cls_heads_shifted - cls_heads
-            x = torch.tensor(idxs[:-1])
-            x_mask = torch.tensor(mask[:-1], dtype=torch.long)
-            y = torch.tensor(idxs[1:])
-            y_mask = torch.tensor(mask[1:], dtype=torch.long)
-            return x, y, x_mask, y_mask
-        else: # chunk has block_size chars/bytes/subwords
-            if self.base == 'word':
-                idxs = [self.vocab[_] for _ in chunk]
-            elif self.base in ['sub','byte']:
-                idxs = self.vocab(chunk, truncation=True, max_length=self.block_size+1, add_special_tokens=False)['input_ids']
-                if len(idxs) != self.block_size + 1:
-                    if recursion > 5:
-                        raise NotImplemented
-                    return self.__getitem__(idx, recursion=recursion+1)
-            elif self.base == 'char':
-                idxs = [self.vocab[_] for _ in chunk]
-            x = torch.tensor(idxs[:-1], dtype=torch.long)
-            y = torch.tensor(idxs[1:], dtype=torch.long)
-            return x, y
+    
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-base", type=str) # byte, char, sub, word
+    parser.add_argument("--ckpt", type=str, default='') # 
+    parser.add_argument("-dataset", type=str) # shakespeare, mc4, trial
+    parser.add_argument("--num_prefix", type=int, default=1)
+    parser.add_argument("--num_epochs", type=int, default=50)
+    parser.add_argument("--device", type=int, default=0)
+    parser.add_argument("--block_size", type=int, default=128+64)
+    parser.add_argument("--batch_size", type=int, default=2)
+    #parser.add_argument("-e2e", type=bool)
+    parser.add_argument('--e2e', default=True, action=argparse.BooleanOptionalAction)
+    args = parser.parse_args()
+    if args.ckpt == '':
+        main(DATASET=args.dataset, DEVICE=args.device, NUM_PREFIX=args.num_prefix, base=args.base, do_e2e=args.e2e, EPOCHS=args.num_epochs, 
+             block_size=args.block_size, batch_size=args.batch_size, debug=False)
+    else:
+        main(LOAD_CKPT=f"/nas/ckgfs/users/thawani/etok/checkpoints/etok/{args.ckpt}/checkpoints/epoch=49-step=9800.ckpt", DEVICE=2, DATASET="shakespeare") # word
+# nohup python unitrain.py -dataset shakespeare -base sub --no-e2e --device 2 &
