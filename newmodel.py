@@ -19,7 +19,7 @@ class myGPT(pl.LightningModule):
     def __init__(self,
                  #e2e_vocab_size=100,
                  num_prefix=0, # 0 for no compression
-                 cls_token='@'
+                 cls_token='@',
                  weight_decay=0.1,
                  betas=(0.9, 0.95),
                  learning_rate=3e-4,
@@ -34,7 +34,7 @@ class myGPT(pl.LightningModule):
                  attn_pdrop=0.1,
                  vocab=None,
                  base='char', # 'char' 'sub' 'word' 'byte'
-                 canvas_size = 12,
+                 canvas_size = 12
                  ):
         super().__init__()
         # auto creates self.hparams from the method signature
@@ -45,9 +45,6 @@ class myGPT(pl.LightningModule):
         self.config = self.hparams
         self.vocab_length = len(vocab)
         self.cls_token = cls_token
-        
-        empt = {v for k, v in vocab.items() if k == ' '} # ' ' is paddingc
-        self.empt = empt
 
         if base == 'sub':
             news = {v for k,v in vocab.items() if k.startswith('Ġ')} # (?) shouldn't they all be first token for each c
@@ -58,32 +55,26 @@ class myGPT(pl.LightningModule):
         # end-to-end tokens
         if num_prefix > 0: # only prefix = 1 is considered
             assert base != 'word'
-            self.wordenc = nn.Sequential(*[Block(self.config) for _ in range(n_e2e_layer)])
             encoder_layer = nn.TransformerEncoderLayer(d_model=n_embd, nhead=n_e2e_head, batch_first=True)
             self.wordenc = nn.TransformerEncoder(encoder_layer, num_layers=n_e2e_layer)
             canvas_size = canvas_size
-            self.word_pe = nn.Parameter(torch.zeros(1, block_size*num_prefix, n_embd))
+            self.word_pe = nn.Parameter(torch.zeros(1, block_size, n_embd))
         else:
             canvas_size = block_size
         
         # input embedding stem
         self.in_emb = nn.Embedding(len(vocab) + num_prefix, n_embd)
-        self.in_pe = nn.Parameter(torch.zeros(1, canvas_size + num_prefix, n_embd))
-        self.seq_pe = nn.Parameter(torch.zeros(1, block_size))
+        self.in_pe = nn.Parameter(torch.zeros(1, block_size, n_embd))
         #self.drop = nn.Dropout(embd_pdrop)
 
-        # transformer
-        self.register_buffer("mask", torch.tril(torch.ones(block_size, block_size)))
-        self.config.block_size = block_size * max(num_prefix,1)
+        # transformer (!) check whether blocks is changed
         self.blocks = nn.Sequential(*[Block(self.config) for _ in range(n_layer)])
         self.config_block_size = block_size
 
         # decoder head
         self.ln_f = nn.LayerNorm(n_embd)
         if num_prefix > 0:
-            self.config.block_size = canvas_size + num_prefix 
             self.decoder_blocks = nn.Sequential(*[Block(self.config) for _ in range(n_e2e_layer)])
-            self.config.block_size = block_size 
             self.head = nn.Linear(n_embd, len(vocab), bias=False)
         else:
             self.head = nn.Linear(n_embd, len(vocab), bias=False)
@@ -116,82 +107,54 @@ class myGPT(pl.LightningModule):
         optimizer = torch.optim.AdamW(optim_groups, lr=self.hparams.learning_rate, betas=self.hparams.betas)
         return optimizer
 
-    def _add_cls(self, idx):
-        B,t = idx.size()
-        idx_with_cls = []
-        for i in range(B):
-            head_indx_list = torch.where(idx[i].unsqueeze(1) == self.news)[0]
-            now_idx_with_cls = tolist(idx[i])
-            for head_indx in reversed(head_indx_list):
-                for offset in range(self.config.num_prefix):
-                    now_idx_with_cls.insert(head_indx, self.vocab_length+self.config.num_prefix-1-offset)
-            idx_with_cls.append(now_idx_with_cls)
-         return torch.nn.utils.rnn.pad_sequence(idx_with_cls, batch_first = True)
-    
-    def _get_cls_indx(self, idx):
-        cls_indx_list = []
-        for seq in idx:
-            cls_indx_list.append(torch.where(seq.unsqueeze(1) == self.news)[0])
-        cls_indx_list = [x - self.config.num_prefix for x in cls_indx_list]
-        return cls_indx_list
+# get cls index (padding indexs are 0 at the end) (!) assumption: each input sequence has same number of subword tokens, different num of words
+    def _get_cls_indx(self, mask):
+        # mask = [B, t]
+        cum = torch.cumsum(mask, dim=-1) # cum = [B]
+        token_len = cum[0]
+        word_lens = torch.clone(mask)
+        cls_indx = cum - word_lens
+        cls_indx = torch.where(cls_indx < token_len, cls_indx, 0)
+        return cls_indx
 
-    def _make_mask(self, idx, cls_indx_list):
-        for cls_indx in cls_indx_list:
-            mask = torch.zeros((idx.size()[1], idx.size()[1]))
-            indx_list_len, = cls_indx.size()
-            for i in range(indx_list_len):
-                now = cls_indx[i]
-                nxt = len(cls_indx) 
-                if(not (i == indx_list_len-1)):
-                    nxt = cls_indx[i+1]
-                for tri_i in range(now, nxt):
-                    for tri_j in range(now, now+1+(tri_i-now)):
-                        mask[tri_i][tri_j] = 1
-            masks.append(mask)
-        masks = torch.stack(masks)
-        return masks # [B, t, t]
-    
-    def _extract_cls(self, out, cls_indx_list): #(!) cls_out is padded
+# make local attn masks
+    def _make_mask(self, mask): 
+        p = torch.nn.utils.rnn.pad_sequence(mask, batch_first = True) #(!) why there is a pad seq
+        b, l = p.shape # what is p 
+        n = sum(p[0]) # not finished
+        y_ = torch.cumsum(p,-1).reshape(-1).repeat_interleave(p.reshape(-1)).reshape((b,n))
+        x_ = y_ - p.reshape(-1).repeat_interleave(p.reshape(-1)).reshape((b,n))
+        coords_ = torch.arange(0, n, dtype=int)
+        coords = torch.cartesian_prod(coords_, coords_)
+        mins = torch.min(coords, dim=1).values
+        maxs = torch.max(coords, dim=1).values
+        masks = (x_.repeat_interleave(n, dim=-1) <= mins) * (maxs < y_.repeat_interleave(n, dim=-1))
+        attn_masks = torch.tril(masks.reshape((b,n,n))).int()
+        return attn_masks
+
+# (!) need change 
+    def _extract_cls(self, out, cls_indx): #(!) cls_out is padded
+        # out = [B, t, embd]
+        # cls_indx = [B, t] #t with pad
         cls_out = []
-        B,_,_ = out.size()
+        B, t, embd = out.size()
         for i in range(B):
-            cls_out.append(torch.tensor([ out[i][i:i+self.config.num_prefix, :] for i in cls_indx_list[i]]))
+            # if actual cls -> extract 
+            # if padded cls -> padding 0
+            end_idx = (cls_indx[i] != 0).nonzero(as_tuple=True)[0][-1]
+            cls_indx_seq_truncated = cls_indx[i, :end_idx+1]
+            cls_out.append(torch.tensor(out[i][cls_indx_seq_truncated]))
         cls_out = torch.nn.utils.rnn.pad_sequence(cls_out, batch_first = True)
         return cls_out
 
-    def _get_canvas(self, token_embeddings, net, cls_indx_list):
-        canvas = []
-        B, t, _ = token_embeddings.size()
-
+    def _get_canvas(self, in_embd, net, cls_indx):
+        B, t, _ = in_embd.size()
         for i in range(B):
-            for token_row in token_embeddings:
-                canvas.append(token_row[cls_indx_list[i][1]:, :])     # [t_from2, c] remove the first word
-
-        for i in range(B):
-            for cls_indx in range(cls_indx_list[:-1]) :
-                cls_shift = cls_indx_list[:-1][cls_indx]
-                canvas[i, cls_shift:cls_shift+self.config.num_prefix,:] = net[i, cls_shift:cls_shift+self.config.num_prefix,:]
+            end_idx = (cls_indx[i] != 0).nonzero(as_tuple=True)[0][-1]
+            cls_indx_seq_truncated = cls_indx[i, :end_idx+1] # truncated cls indices
+            in_embd[i][cls_indx_seq_truncated] = net[i]
         
-        canvas = torch.nn.utils.rnn.pad_sequence(canvas, batch_first = True)
-        return canvas
-
-    def _get_out_word(self, out, cls_indx_list):
-        B, t, _ = out.size()
-        out_word = []
-        for i in range(B):
-            cls_shift = cls_indx_list[i][1]
-            now_word = []
-            for cls_seq_indx in range(len(cls_indx_list[i][:-1])):
-                pre_cls = cls_indx_list[i][:-1][cls_seq_indx]
-                if(not cls_seq_indx == (len(cls_indx_list[i][:-1])-1) ):
-                    nxt_cls = cls_indx_list[i][:-1][cls_seq_indx+1]
-                else:
-                    nxt_cls = t
-                    now_word.append(torch.squeeze(out[i,pre_cls-cls_shift+self.config.num_prefix-1:nxt_cls,:])) #(word_len, embd)
-            now_word = torch.stack(now_word) 
-            out_word.append(now_word)
-        out_word = torch.nn.utils.rnn.pad_sequence(out_word, batch_first = True)
-        return out_word #[B, t, embd]
+        return in_embd
 
 #(!) positional embedding not changed
     def forward(self, idx, mask=None, eval=False): # based on assumption, prefix is added before forward function
@@ -200,20 +163,19 @@ class myGPT(pl.LightningModule):
         
         # init encoding
         if p > 0:
-            idx = self._add_cls(idx)
             B, t = idx.size()
             token_embeddings = self.in_emb(idx)
             in_pe = self.in_pe[:, :t, :]
             token_embeddings = self.drop(token_embeddings + in_pe) # [B, t, embd]
-            cls_indx_list = self._get_cls_indx(idx)
-            e2e_masks = self._make_mask(idx, cls_indx_list) #[B, t, t] (?) don't know how to do in batch
+            cls_indx = self._get_cls_indx(mask) 
+            e2e_masks = self._make_mask(idx, mask) #[B, t, t] (?) don't know how to do in batch
 
             out = self.wordenc(token_embeddings, e2e_masks) #[B, t, embd]
-            query = self._extract_cls(out, cls_indx_list) # (!) query is a list of tensor [B, t_cls_pad, embd]
+            query = self._extract_cls(out, cls_indx) # query = [B, cls_max, embd]
             
-            _, tq, _ = query.size() #[B, t_cls_pad, embd]
+            _, tq, _ = query.size() #[B, cls_max, embd]
             word_pe = self.word_pe[:, tq, :]
-            in_emb = self.drop(query + word_pe)
+            in_embd = self.drop(query + word_pe)
 
         else:
             b, t = idx.size()
@@ -221,20 +183,20 @@ class myGPT(pl.LightningModule):
             in_emb = self.wordenc(token_embeddings)
 
         
-        net = self.blocks(in_emb)
+        net = self.blocks(in_embd) #in_emb is the embeddingsafter local attn
         net = self.ln_f(net)
 
         if p > 0:
             if eval:
                 return net #(?) don't really understand what does original reshape mean
             
-            canvas = self._get_canvas(token_embeddings, net, cls_indx_list)
-            B, t_canvas, _ = canvas.size()
+            canvas = self._get_canvas(in_embd, net, cls_indx)
+            B, t_canvas, _ = canvas.shape
             canvas_pe = self.in_pe[:, :t_canvas, :] #(!) change positional embeddings!
             tokens_out = self.drop(canvas+canvas_pe)
             out = self.decoder_blocks(tokens_out)
 
-            logits = self.head(self._get_out_word(out))
+            logits = self.head(out)
         else:
             logits = self.head(net.reshape(b, t, -1))
         return logits
