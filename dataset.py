@@ -258,10 +258,10 @@ class myDataset(Dataset):
         #self.vocab = [{},{}]    
         if base == 'char':
             self.vocab = { ch:i for i,ch in enumerate(chars) }
-            self.rev = {k:v for v,k in self.vocab.items()}
+            self.rev = {k:v for v,k in self.vocab.get_vocab().items()}
         elif base == 'word':
             self.vocab = { w:i for i,w in enumerate(words) }
-            self.rev = {k:v for v,k in self.vocab.items()}
+            self.rev = {k:v for v,k in self.vocab.get_vocab().items()}
         elif base == 'sub':
             self.vocab = AutoTokenizer.from_pretrained("gpt2")
         elif base == 'byte':
@@ -287,7 +287,7 @@ class myDataset(Dataset):
         if vocab:
             self.vocab = vocab
             if base in ['char','word']:
-                self.rev = {k:v for v,k in self.vocab.items()}
+                self.rev = {k:v for v,k in self.vocab.get_vocab().items()}
             #self.maxlen = maxlen
         print(f"{self.maxlen=}")
         
