@@ -47,10 +47,10 @@ class myGPT(pl.LightningModule):
         self.cls_token = cls_token
 
         if base == 'sub':
-            news = {v for k,v in vocab.items() if k.startswith('Ġ')} # (?) shouldn't they all be first token for each c
+            news = {v for k,v in vocab.get_vocab().items() if k.startswith('Ġ')} # (?) shouldn't they all be first token for each c
             self.news = torch.tensor(list(news), dtype=torch.int64).unsqueeze(0)
         elif base in ['char','word']:
-            self.rev = {k:v for v,k in vocab.items()}
+            self.rev = {k:v for v,k in vocab.get_vocab().items()}
 
         # end-to-end tokens
         if num_prefix > 0: # only prefix = 1 is considered
