@@ -219,16 +219,16 @@ def main(
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-base", type=str) # byte, char, sub, word
+    parser.add_argument("-base", type=str, default='sub') # byte, char, sub, word
     parser.add_argument("--ckpt", type=str, default='') # 
-    parser.add_argument("-dataset", type=str) # shakespeare, mc4, trial
-    parser.add_argument("--num_prefix", type=int, default=4)
+    parser.add_argument("-dataset", type=str, default='shakespeare') # shakespeare, mc4, trial
+    parser.add_argument("--num_prefix", type=int, default=1)
     parser.add_argument("--num_epochs", type=int, default=50)
     parser.add_argument("--device", type=int, default=0)
     parser.add_argument("--block_size", type=int, default=128+64)
     parser.add_argument("--batch_size", type=int, default=2)
-    #parser.add_argument("-e2e", type=bool)
-    parser.add_argument('--e2e', default=False, action=argparse.BooleanOptionalAction)
+    #parser.add_argument("-e2e", type=bool, default=True)
+    parser.add_argument('--e2e', default=True, action=argparse.BooleanOptionalAction)
     args = parser.parse_args()
     if args.ckpt == '':
         main(DATASET=args.dataset, DEVICE=args.device, NUM_PREFIX=args.num_prefix, base=args.base, do_e2e=args.e2e, EPOCHS=args.num_epochs, 
