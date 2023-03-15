@@ -32,13 +32,13 @@ import random
 import argparse
 
 def main(
-        DATASET='trial', 
+        DATASET='shakespeare', 
         DEVICE=0, 
-        NUM_PREFIX=4, 
+        NUM_PREFIX=1, 
         #block_size=128, 
         block_size=256,
         batch_size=8, 
-        base='word', 
+        base='sub', 
         do_e2e=False,
         EPOCHS=1,
         LOAD_CKPT=None,
@@ -61,7 +61,7 @@ def main(
         
     CACHE_DIR="/nas/ckgfs/users/thawani/hf_cache/datasets" # default ~/.cache/huggingface/datasets
     if DATASET == 'shakespeare': # one line of poem is roughly 50 characters
-        text = open('/nas/home/thawani/etok/tinyshake.txt', 'r').read() # don't worry we won't run out of file handles
+        text = open(r'C:\Users\lenovo\OneDrive\Desktop\Project\eToK\eTok-Compressed_Dim_Version\tinyshake.txt', 'r').read() # don't worry we won't run out of file handles
     elif DATASET == 'wiki':
         text = ' '.join(datasets.load_dataset("wikitext", "wikitext-2-v1", split="train", cache_dir=CACHE_DIR)['text'])
     elif DATASET == 'mc4':
@@ -156,9 +156,11 @@ def main(
         lr_decay = LearningRateDecayCallback(learning_rate=1e-4, warmup_tokens=512*20,
                                             final_tokens=00*len(train_set)*block_size)
         
-        trainer = Trainer(#accelerator="cpu",
+        trainer = Trainer(
+                        accelerator="gpu",
                         profiler="simple",
-                        accelerator="gpu", devices=[DEVICE], 
+                        # accelerator="gpu", 
+                        #devices=[DEVICE], 
                         precision=16, 
                         max_epochs=EPOCHS,
                         gradient_clip_val=1.0, 
@@ -227,7 +229,7 @@ if __name__ == "__main__":
     parser.add_argument("--device", type=int, default=0)
     parser.add_argument("--block_size", type=int, default=128+64)
     parser.add_argument("--batch_size", type=int, default=2)
-    #parser.add_argument("-e2e", type=bool, default=True)
+    #parser.add_argument("-e2e", type=bool)
     parser.add_argument('--e2e', default=True, action=argparse.BooleanOptionalAction)
     args = parser.parse_args()
     if args.ckpt == '':
