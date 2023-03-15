@@ -4,7 +4,7 @@ import regex as re
 
 import random, math, collections
 import numpy as np
-
+from itertools import chain
 from transformers import AutoTokenizer
 
 class CharDataset(Dataset):
@@ -282,7 +282,7 @@ class myDataset(Dataset):
         if base == 'word':
             self.data = self.data.split(' ')
         if do_e2e and base == 'sub':
-            self.data = [self.vocab(word, truncation=True, max_length=self.maxlen, add_special_tokens=False)['input_ids'] for word in self.data.split(' ')] #(!) pre tokenization
+            self.data = list(chain(*[self.vocab(word, truncation=True, max_length=self.maxlen, add_special_tokens=False)['input_ids'] for word in self.data.split(' ')])) #(!) pre tokenization
             
         if vocab:
             self.vocab = vocab
@@ -307,7 +307,7 @@ class myDataset(Dataset):
         if not chunk: # can give space-sep (for e2e) or raw text too.
             i = np.random.randint(0, len(self.data) - (self.block_size + 1)) 
             # we're actually going to "cheat" and pick a spot in the dataset at random
-            chunk = self.data[i:round(i+k*self.block_size+1)] # block_size ~ word size
+            chunk = self.data[i:i+k*self.block_size+2] # block_size ~ word size (!) +1 need to stay!!!!
             
         if self.do_e2e: # chunk has block_size words
             if self.base in ['sub','byte']: # TODO: 0 may not be padding here?
@@ -316,15 +316,30 @@ class myDataset(Dataset):
                 idxs = [[self.vocab[_] for _ in word] for word in chunk]
             #mask = torch.tensor([len(_)-1 for _ in x], dtype=torch.long)
 
-            cls_heads = torch.where(idxs == self.vocab(self.cls_token))[0]
+            idxs = torch.tensor(idxs)
+            idxs[0] = self.vocab(self.cls_token)['input_ids'][0]
+            cls_heads = torch.where(idxs == self.vocab(self.cls_token)['input_ids'][0])[0]            
             cls_heads_shifted = torch.roll(cls_heads, shifts=-1, dims=0)
             cls_heads_shifted[-1] = idxs.size()[-1]
             mask = cls_heads_shifted - cls_heads
-            x = torch.tensor(idxs[:-1])
-            x_mask = torch.tensor(mask[:-1], dtype=torch.long)
-            y = torch.tensor(idxs[1:])
-            y_mask = torch.tensor(mask[1:], dtype=torch.long)
+            print('mask is: ')
+            print(torch.cumsum(mask, -1))
+            print(idxs.shape)
+            x = torch.tensor(idxs)
+            x = x[:-1]
+            #x = torch.nn.functional.pad(x, (0, self.block_size - (x_mask.shape)[-1]), mode='constant', value=0)
+            x_mask = torch.tensor(mask, dtype=torch.long)
+            x_mask[-1]-=1
+            x_mask = torch.nn.functional.pad(x_mask, (0, 1 + self.block_size - (x_mask.shape)[-1]), mode='constant', value=0)
+            y = torch.tensor(idxs)
+            y = y[1:]
+            #y = torch.nn.functional.pad(y, (0, self.block_size - (y_mask.shape)[-1]), mode='constant', value=0)
+            y_mask = torch.tensor(mask, dtype=torch.long)
+            y_mask[0]-=1
+            y_mask = torch.nn.functional.pad(y_mask, (0, 1 + self.block_size - (y_mask.shape)[-1]), mode='constant', value=0)
+            print(x.shape, y.shape, x_mask.shape, y_mask.shape, self.block_size)
             return x, y, x_mask, y_mask
+            # (!) x, y are padded too !!!!
         else: # chunk has block_size chars/bytes/subwords
             if self.base == 'word':
                 idxs = [self.vocab[_] for _ in chunk]
