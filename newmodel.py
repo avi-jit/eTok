@@ -147,25 +147,25 @@ class myGPT(pl.LightningModule):
         for i in range(B):
             # if actual cls -> extract 
             # if padded cls -> padding 0
+            if(cls_indx[i].eq(0).all()):
+                cls_out.append(torch.zeros(1, embd))
+                continue
             end_idx = (cls_indx[i] != 0).nonzero(as_tuple=True)[0][-1]
             cls_indx_seq_truncated = cls_indx[i, :end_idx+1]
             cls_out.append(torch.tensor(out[i][cls_indx_seq_truncated]))
         cls_out = torch.nn.utils.rnn.pad_sequence(cls_out, batch_first = True)
         return cls_out
 
-    def _get_canvas(self, in_embd, net, cls_indx):
-        B, t, _ = in_embd.size()
+    def _get_canvas(self, out, net, cls_indx):
+        B, t, _ = out.size()
         for i in range(B):
+            if(cls_indx[i].eq(0).all()): #(!) why continue
+                continue
             end_idx = (cls_indx[i] != 0).nonzero(as_tuple=True)[0][-1]
             cls_indx_seq_truncated = cls_indx[i, :end_idx+1] # truncated cls indices
-            print(end_idx)
-            print(cls_indx_seq_truncated)
-            print(cls_indx_seq_truncated.size())
-            print(in_embd.size())
-            print(net.size())
-            in_embd[i][cls_indx_seq_truncated] = net[i, :end_idx+1]
+            out[i][cls_indx_seq_truncated] = net[i, :end_idx+1]
         
-        return in_embd
+        return out
 
 #(!) positional embedding not changed
     def forward(self, idx, mask=None, eval=False): # based on assumption, prefix is added before forward function
@@ -208,13 +208,14 @@ class myGPT(pl.LightningModule):
             if eval:
                 return net #(?) don't really understand what does original reshape mean
             
-            canvas = self._get_canvas(in_embd, net, cls_indx)
+            canvas = self._get_canvas(out, net, cls_indx)
             B, t_canvas, _ = canvas.shape
             canvas_pe = self.in_pe[:, :t_canvas, :] #(!) change positional embeddings!
-            tokens_out = self.drop(canvas+canvas_pe)
-            out = self.decoder_blocks(tokens_out)
+            tokens_out = self.drop(canvas+canvas_pe) #[B, t, embd]
+            out = self.decoder_blocks(tokens_out) 
 
             logits = self.head(out)
+            print(logits.size())
         else:
             logits = self.head(net.reshape(b, t, -1))
         return logits
@@ -228,12 +229,18 @@ class myGPT(pl.LightningModule):
             x, y, x_mask, y_mask = batch
             logits = self(x, x_mask) # b,t,wvocab
 
+# logits = [B, t, vocab]
         # if we are given some desired targets also calculate the loss
         loss = None
         if y is not None:
             #loss = F.cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1))
             if self.config.num_prefix > 0:
-                loss = F.cross_entropy(logits.transpose(1,2).transpose(1,3), y[:,:-1,:]) # logits (b,t-1,c0,Vc). y (b,t,c0)
+                logits = logits[:, :-1, :]
+                B, t, vocab_len = logits.size()
+                logits = torch.reshape(logits, (-1, vocab_len))
+                y = y[:, :-1]
+                y = torch.reshape(y, (-1,))
+                loss = F.cross_entropy(logits, y)
             else:
                 loss = F.cross_entropy(logits.transpose(1,2), y)
         if not eval:
