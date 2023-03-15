@@ -65,7 +65,7 @@ class myGPT(pl.LightningModule):
         # input embedding stem
         self.in_emb = nn.Embedding(len(vocab) + num_prefix, n_embd)
         self.in_pe = nn.Parameter(torch.zeros(1, block_size, n_embd))
-        #self.drop = nn.Dropout(embd_pdrop)
+        self.drop = nn.Dropout(embd_pdrop)
 
         # transformer (!) check whether blocks is changed
         self.blocks = nn.Sequential(*[Block(self.config) for _ in range(n_layer)])
@@ -121,16 +121,22 @@ class myGPT(pl.LightningModule):
     def _make_mask(self, mask): 
         p = torch.nn.utils.rnn.pad_sequence(mask, batch_first = True) #(!) why there is a pad seq
         b, l = p.shape # what is p 
-        n = sum(p[0]) # not finished
+        n = sum(p[0]) # not finished  # b = 2, n = 192 p = 382 (191*2)
+        n = n.item()
         y_ = torch.cumsum(p,-1).reshape(-1).repeat_interleave(p.reshape(-1)).reshape((b,n))
         x_ = y_ - p.reshape(-1).repeat_interleave(p.reshape(-1)).reshape((b,n))
         coords_ = torch.arange(0, n, dtype=int)
         coords = torch.cartesian_prod(coords_, coords_)
         mins = torch.min(coords, dim=1).values
         maxs = torch.max(coords, dim=1).values
+        x_ = x_.cuda()
+        y_ = y_.cuda()
+        mins = mins.cuda()
+        maxs = maxs.cuda()
         masks = (x_.repeat_interleave(n, dim=-1) <= mins) * (maxs < y_.repeat_interleave(n, dim=-1))
         attn_masks = torch.tril(masks.reshape((b,n,n))).int()
-        return attn_masks
+        #attn_masks = [torch.tensor(mask).bool() for mask in attn_masks]
+        return attn_masks.bool()
 
 # (!) need change 
     def _extract_cls(self, out, cls_indx): #(!) cls_out is padded
@@ -152,7 +158,12 @@ class myGPT(pl.LightningModule):
         for i in range(B):
             end_idx = (cls_indx[i] != 0).nonzero(as_tuple=True)[0][-1]
             cls_indx_seq_truncated = cls_indx[i, :end_idx+1] # truncated cls indices
-            in_embd[i][cls_indx_seq_truncated] = net[i]
+            print(end_idx)
+            print(cls_indx_seq_truncated)
+            print(cls_indx_seq_truncated.size())
+            print(in_embd.size())
+            print(net.size())
+            in_embd[i][cls_indx_seq_truncated] = net[i, :end_idx+1]
         
         return in_embd
 
@@ -163,14 +174,21 @@ class myGPT(pl.LightningModule):
         
         # init encoding
         if p > 0:
-            B, t = idx.size()
+            #B, t = idx.size()
             token_embeddings = self.in_emb(idx)
+            B, t, embd = token_embeddings.size()
             in_pe = self.in_pe[:, :t, :]
             token_embeddings = self.drop(token_embeddings + in_pe) # [B, t, embd]
             cls_indx = self._get_cls_indx(mask) 
-            e2e_masks = self._make_mask(idx, mask) #[B, t, t] (?) don't know how to do in batch
-
-            out = self.wordenc(token_embeddings, e2e_masks) #[B, t, embd]
+            e2e_masks = self._make_mask(mask) #[B, t, t] (?) don't know how to do in batch
+            out = torch.zeros(1, t, embd)
+            out = out.cuda()
+            for i in range(B):
+                out_new = self.wordenc(token_embeddings[i], torch.repeat_interleave(e2e_masks[i].unsqueeze(0),self.config.n_e2e_head,dim=0))
+                out_new = out_new.cuda()
+                out = torch.cat((out, out_new.unsqueeze(0)), dim=0)
+            out = out[1:]
+            #out = self.wordenc(token_embeddings, e2e_masks.bool()) #[B, t, embd]
             query = self._extract_cls(out, cls_indx) # query = [B, cls_max, embd]
             
             _, tq, _ = query.size() #[B, cls_max, embd]
@@ -180,7 +198,7 @@ class myGPT(pl.LightningModule):
         else:
             b, t = idx.size()
             in_pe = self.in_pe[:, :t]
-            in_emb = self.wordenc(token_embeddings)
+            in_embd = self.wordenc(token_embeddings)
 
         
         net = self.blocks(in_embd) #in_emb is the embeddingsafter local attn
@@ -306,11 +324,11 @@ class myGPT(pl.LightningModule):
                     rows = [[" ".join([self.rev[_c] for _c in _context]), self.rev[_pred], self.rev[_true].strip()] for _context, _pred, _true in zip(x[:,-context:].cpu().tolist(), preds.cpu().tolist(), true.cpu().tolist())]
             else: # e2e
                 x, y, x_mask, y_mask = batch
-                b,l,c = x.shape
+                b,l = x.shape
                 #logits = self(x[:,-context:], x_mask[:, -context:]) # b,context-1,c0,V
                 #intermediates = []
                 preds = torch.zeros((b,1),device=x.device,dtype=x.dtype)
-                for i in range(c): # TODO: efficiently store output for the last word, just run last AR layer
+                for i in range(l): # store output for the whole sequence TODO: efficiently store output for the last word, just run last AR layer
                     '''
                     logits = self(x[:,-context:], x_mask[:, -context:], eval=True) # b,c0,V
                     canvas = token_embeddings[:,1:,:,:] # b,t-1,c,d
@@ -319,25 +337,30 @@ class myGPT(pl.LightningModule):
                     out = self.decoder_blocks(tokens_out.reshape(b*(t-1),c,-1))
                     logits = self.head(out.reshape(b,t-1,c,-1)[:,:,p-1:-1,:]) # b,t-1,c0,Vc
                     '''
-                    logits = self(x[:,-context:], x_mask[:, -context:]) # b,context-1,c0,V
-                    logits_ = logits[:, -1, i, :] / 1.0 # b,V
+                    logits = self(x, x_mask) # b,context-1,c0,V
+                    logits_ = logits[:, i, :] / 1.0 # b,V
                     probs = F.softmax(logits_, dim=-1)
                     idx_next = torch.multinomial(probs, num_samples=1)
                     preds = torch.cat((preds, idx_next),dim=1)
                     #idx = torch.cat((idx, idx_next), dim=1)
                     # check if idx_next matches original x[:,-1,i] for unit_acc. or keep aggregating, will retain old preds
-                    x[:,-1,i] = idx_next.squeeze() # x[:,-1] is only used to initialize canvas with hints.
+                    x[:, i] = idx_next.squeeze() # x[:, i] is only used to initialize canvas with hints.
                     #intermediates.append(idx_next.squeeze().cpu().tolist())
                     #'''
                 #preds = torch.stack(intermediates, dim=1) # b,c0
                 #preds = torch.argmax(logits[:,-1],dim=-1) # b,c0
+
+
+                # (!) change batch idx initialization
+                # (!) change validation logic
+
                 preds = preds[:,1:]
-                true = y[:,-2]
+                true = y
                 if batch_idx == 0:
                     if self.config.base == 'char':
                         rows = [[" ".join(["".join([self.rev[_c] for _c in _word]).strip() for _word in _context]), "".join([self.rev[_c] for _c in _pred]).strip(), "".join([self.rev[_c] for _c in _true]).strip()] for _context, _pred, _true in zip(y[:,-(context+2):-2].cpu().tolist(), preds.cpu().tolist(), true.cpu().tolist())]
                     elif self.config.base in ['sub','byte']:
-                        rows = [[" ".join([self.config.vocab.decode([_c for _c in _word if _c != 0]) for _word in _context]), self.config.vocab.decode([_c for _c in _pred if _c != 0]), self.config.vocab.decode([_c for _c in _true if _c != 0]).strip()] for _context, _pred, _true in zip(y[:,-(context+2):-2].cpu().tolist(), preds.cpu().tolist(), true.cpu().tolist())]
+                        rows = [[" ".join([self.config.vocab.decode([_c for _c in seq if _c != 0])]), self.config.vocab.decode([_c for _c in _pred if _c != 0]), self.config.vocab.decode([_c for _c in _true if _c != 0]).strip()] for seq, _pred, _true in zip(x.cpu().tolist(), preds.cpu().tolist(), true.cpu().tolist())]
             corrects = (preds==true)
             acc_unit = (corrects*(true!=0).float()).sum() / (true!=0).float().sum() # sub/char TODO: exclude 0s
             if self.config.base == 'word':
