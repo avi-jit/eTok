@@ -14,6 +14,36 @@ from mingpt.model import Block
 logger = logging.getLogger(__name__)
 
 
+class SelfAttentionBlock(nn.Module):
+    def __init__(self, input_dim, num_heads):
+        super().__init__()
+        self.multihead_attention = nn.MultiheadAttention(input_dim, num_heads, batch_frst = True)
+        self.layer_norm = nn.LayerNorm(input_dim)
+    
+    def forward(self, x, mask=None):
+        # Compute the self-attention weights and output
+        attn_output, _ = self.multihead_attention(x, x, x, attn_mask=mask)
+        
+        # Apply layer normalization and residual connection
+        output = self.layer_norm(x + attn_output)
+        return output
+
+# Define the self-attention block sequence
+class SelfAttentionBlockSequence(nn.Module):
+    def __init__(self, input_dim, num_heads, num_layers):
+        super().__init__()
+        self.blocks = nn.ModuleList([
+            SelfAttentionBlock(input_dim, num_heads) for _ in range(num_layers)
+        ])
+    
+    def forward(self, x, mask=None):
+        # Pass the input through each block in the sequence
+        for block in self.blocks:
+            x = block(x, mask=mask)
+        return x
+
+
+
 class myGPT(pl.LightningModule):
     """  end-to-end tokenized full GPT language model, with a context size of block_size """
     def __init__(self,
@@ -74,7 +104,7 @@ class myGPT(pl.LightningModule):
         # decoder head
         self.ln_f = nn.LayerNorm(n_embd)
         if num_prefix > 0:
-            self.decoder_blocks = nn.Sequential(*[Block(self.config) for _ in range(n_e2e_layer)])
+            self.decoder_blocks = SelfAttentionBlockSequence(input_dim=n_embd, num_heads=n_e2e_head, num_layers=n_e2e_layer)
             self.head = nn.Linear(n_embd, len(vocab), bias=False)
         else:
             self.head = nn.Linear(n_embd, len(vocab), bias=False)
@@ -125,14 +155,12 @@ class myGPT(pl.LightningModule):
         n = n.item()
         y_ = torch.cumsum(p,-1).reshape(-1).repeat_interleave(p.reshape(-1)).reshape((b,n))
         x_ = y_ - p.reshape(-1).repeat_interleave(p.reshape(-1)).reshape((b,n))
+        x_ = x_.to(mask.device)
+        y_ = y_.to(mask.device)
         coords_ = torch.arange(0, n, dtype=int)
         coords = torch.cartesian_prod(coords_, coords_)
-        mins = torch.min(coords, dim=1).values
-        maxs = torch.max(coords, dim=1).values
-        x_ = x_.cuda()
-        y_ = y_.cuda()
-        mins = mins.cuda()
-        maxs = maxs.cuda()
+        mins = torch.min(coords, dim=1).values.to(mask.device)
+        maxs = torch.max(coords, dim=1).values.to(mask.device)
         masks = (x_.repeat_interleave(n, dim=-1) <= mins) * (maxs < y_.repeat_interleave(n, dim=-1))
         attn_masks = torch.tril(masks.reshape((b,n,n))).int()
         #attn_masks = [torch.tensor(mask).bool() for mask in attn_masks]
@@ -181,13 +209,8 @@ class myGPT(pl.LightningModule):
             token_embeddings = self.drop(token_embeddings + in_pe) # [B, t, embd]
             cls_indx = self._get_cls_indx(mask) 
             e2e_masks = self._make_mask(mask) #[B, t, t] (?) don't know how to do in batch
-            out = torch.zeros(1, t, embd)
-            out = out.cuda()
-            for i in range(B):
-                out_new = self.wordenc(token_embeddings[i], torch.repeat_interleave(e2e_masks[i].unsqueeze(0),self.config.n_e2e_head,dim=0))
-                out_new = out_new.cuda()
-                out = torch.cat((out, out_new.unsqueeze(0)), dim=0)
-            out = out[1:]
+            e2e_masks = torch.repeat_interleave(e2e_masks, self.config.n_e2e_head, dim=0)
+            out = self.wordenc(token_embeddings, mask = e2e_masks)
             #out = self.wordenc(token_embeddings, e2e_masks.bool()) #[B, t, embd]
             query = self._extract_cls(out, cls_indx) # query = [B, cls_max, embd]
             
@@ -210,9 +233,9 @@ class myGPT(pl.LightningModule):
             
             canvas = self._get_canvas(out, net, cls_indx)
             B, t_canvas, _ = canvas.shape
-            canvas_pe = self.in_pe[:, :t_canvas, :] #(!) change positional embeddings!
+            canvas_pe = self.in_pe[:, :t_canvas, :] 
             tokens_out = self.drop(canvas+canvas_pe) #[B, t, embd]
-            out = self.decoder_blocks(tokens_out) 
+            out = self.decoder_blocks(tokens_out, mask=e2e_masks)
 
             logits = self.head(out)
             print(logits.size())
@@ -330,39 +353,52 @@ class myGPT(pl.LightningModule):
                 if batch_idx == logging_batch_idx:
                     rows = [[" ".join([self.rev[_c] for _c in _context]), self.rev[_pred], self.rev[_true].strip()] for _context, _pred, _true in zip(x[:,-context:].cpu().tolist(), preds.cpu().tolist(), true.cpu().tolist())]
             else: # e2e
+                # ---
                 x, y, x_mask, y_mask = batch
-                b,l = x.shape
-                #logits = self(x[:,-context:], x_mask[:, -context:]) # b,context-1,c0,V
-                #intermediates = []
-                preds = torch.zeros((b,1),device=x.device,dtype=x.dtype)
-                for i in range(l): # store output for the whole sequence TODO: efficiently store output for the last word, just run last AR layer
-                    '''
-                    logits = self(x[:,-context:], x_mask[:, -context:], eval=True) # b,c0,V
-                    canvas = token_embeddings[:,1:,:,:] # b,t-1,c,d
-                    canvas[:,:,:p,:] = net.reshape(b,t,p,-1)[:,:-1,:,:] # b,t-1,p,d so first t-1 outputs
-                    tokens_out = self.drop(canvas + in_pe)
-                    out = self.decoder_blocks(tokens_out.reshape(b*(t-1),c,-1))
-                    logits = self.head(out.reshape(b,t-1,c,-1)[:,:,p-1:-1,:]) # b,t-1,c0,Vc
-                    '''
-                    logits = self(x, x_mask) # b,context-1,c0,V
-                    logits_ = logits[:, i, :] / 1.0 # b,V
-                    probs = F.softmax(logits_, dim=-1)
-                    idx_next = torch.multinomial(probs, num_samples=1)
-                    preds = torch.cat((preds, idx_next),dim=1)
-                    #idx = torch.cat((idx, idx_next), dim=1)
-                    # check if idx_next matches original x[:,-1,i] for unit_acc. or keep aggregating, will retain old preds
-                    x[:, i] = idx_next.squeeze() # x[:, i] is only used to initialize canvas with hints.
-                    #intermediates.append(idx_next.squeeze().cpu().tolist())
-                    #'''
-                #preds = torch.stack(intermediates, dim=1) # b,c0
-                #preds = torch.argmax(logits[:,-1],dim=-1) # b,c0
+                logits = self(x, x_mask) # b,t,wvocab
+                logits = logits[:, :-1, :] 
+                probs = F.softmax(logits, dim=-1)
+                B, t, _ = probs.size()
+                probs = probs.reshape(B*t, -1)
+                preds = torch.multinomial(probs, num_samples=1)
+                preds = preds.reshape(B, t)
+                true = y[:, :-1]
+                
+                # ---
+
+                # x, y, x_mask, y_mask = batch
+                # b,l = x.shape
+                # #logits = self(x[:,-context:], x_mask[:, -context:]) # b,context-1,c0,V
+                # #intermediates = []
+                # preds = torch.zeros((b,1),device=x.device,dtype=x.dtype)
+                # for i in range(l): # store output for the whole sequence TODO: efficiently store output for the last word, just run last AR layer
+                #     '''
+                #     logits = self(x[:,-context:], x_mask[:, -context:], eval=True) # b,c0,V
+                #     canvas = token_embeddings[:,1:,:,:] # b,t-1,c,d
+                #     canvas[:,:,:p,:] = net.reshape(b,t,p,-1)[:,:-1,:,:] # b,t-1,p,d so first t-1 outputs
+                #     tokens_out = self.drop(canvas + in_pe)
+                #     out = self.decoder_blocks(tokens_out.reshape(b*(t-1),c,-1))
+                #     logits = self.head(out.reshape(b,t-1,c,-1)[:,:,p-1:-1,:]) # b,t-1,c0,Vc
+                #     '''
+                #     logits = self(x, x_mask) # b,context-1,c0,V
+                #     logits_ = logits[:, i, :] / 1.0 # b,V
+                #     probs = F.softmax(logits_, dim=-1)
+                #     idx_next = torch.multinomial(probs, num_samples=1)
+                #     preds = torch.cat((preds, idx_next),dim=1)
+                #     #idx = torch.cat((idx, idx_next), dim=1)
+                #     # check if idx_next matches original x[:,-1,i] for unit_acc. or keep aggregating, will retain old preds
+                #     x[:, i] = idx_next.squeeze() # x[:, i] is only used to initialize canvas with hints.
+                #     #intermediates.append(idx_next.squeeze().cpu().tolist())
+                #     #'''
+                # #preds = torch.stack(intermediates, dim=1) # b,c0
+                # #preds = torch.argmax(logits[:,-1],dim=-1) # b,c0
 
 
-                # (!) change batch idx initialization
-                # (!) change validation logic
+                # # (!) change batch idx initialization
+                # # (!) change validation logic
 
-                preds = preds[:,1:]
-                true = y
+                # preds = preds[:,1:]
+                # true = y
                 if batch_idx == 0:
                     if self.config.base == 'char':
                         rows = [[" ".join(["".join([self.rev[_c] for _c in _word]).strip() for _word in _context]), "".join([self.rev[_c] for _c in _pred]).strip(), "".join([self.rev[_c] for _c in _true]).strip()] for _context, _pred, _true in zip(y[:,-(context+2):-2].cpu().tolist(), preds.cpu().tolist(), true.cpu().tolist())]
