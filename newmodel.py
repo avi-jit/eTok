@@ -28,7 +28,6 @@ class SelfAttentionBlock(nn.Module):
         output = self.layer_norm(x + attn_output)
         return output
 
-# Define the self-attention block sequence
 class SelfAttentionBlockSequence(nn.Module):
     def __init__(self, input_dim, num_heads, num_layers):
         super().__init__()
@@ -37,7 +36,6 @@ class SelfAttentionBlockSequence(nn.Module):
         ])
     
     def forward(self, x, mask=None):
-        # Pass the input through each block in the sequence
         for block in self.blocks:
             x = block(x, mask=mask)
         return x
@@ -45,7 +43,6 @@ class SelfAttentionBlockSequence(nn.Module):
 
 
 class myGPT(pl.LightningModule):
-    """  end-to-end tokenized full GPT language model, with a context size of block_size """
     def __init__(self,
                  #e2e_vocab_size=100,
                  num_prefix=0, # 0 for no compression
