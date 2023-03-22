@@ -380,8 +380,8 @@ class myGPT(pl.LightningModule):
                         seq_mask[-1] += 1
                     x[i][pred_end] = 0
                     y[i][pred_end] = 0
-                preds = x[:, context:]
-                true = y[:, context:]
+                preds = x
+                true = y
 
                 if batch_idx == 0:
                     if self.config.base == 'char':
