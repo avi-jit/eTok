@@ -351,51 +351,38 @@ class myGPT(pl.LightningModule):
                     rows = [[" ".join([self.rev[_c] for _c in _context]), self.rev[_pred], self.rev[_true].strip()] for _context, _pred, _true in zip(x[:,-context:].cpu().tolist(), preds.cpu().tolist(), true.cpu().tolist())]
             else: # e2e
                 # ---
-                x, y, x_mask, y_mask = batch
-                logits = self(x, x_mask) # b,t,wvocab
-                logits = logits[:, :-1, :] 
-                probs = F.softmax(logits, dim=-1)
-                B, t, _ = probs.size()
-                probs = probs.reshape(B*t, -1)
-                preds = torch.multinomial(probs, num_samples=1)
-                preds = preds.reshape(B, t)
-                true = y[:, :-1]
-                
-                # ---
+                x, _, _, _ = batch
+                x = x[:context] # (!) context: total num of tokens, not context length
+                y = torch.clone(x)
+                B, t = x.size()
+                for i in range(B):
+                    x_start_idx = torch.where(x[i] == self.config.vocab(self.cls_token)['input_ids'][0])[0]
+                    cls_heads_shifted = torch.roll(x_start_idx, shifts=-1, dims=0)
+                    cls_heads_shifted[-1] = context
+                    x_mask = cls_heads_shifted - x_start_idx
+                    pred_start = x_start_idx[-2] # last full word
+                    pred_end = x_start_idx[-1] # last full word end +1 (pos of last cls)
+                    l = pred_end - pred_start
+                    seq = x[i]
+                    seq = seq[:pred_start]
+                    seq = seq.unsqueeze(0)
+                    seq_mask = x_mask
+                    seq_mask = seq_mask.unsqueeze(0) #[1, context]
+                    seq_mask = torch.cat((seq_mask, torch.zeros(seq_mask.shape[0], 1).to(seq_mask.device)), dim=-1)
+                    seq_mask = F.pad(seq_mask, (0, 1+context - (y_mask.shape)[-1]), mode='constant', value=0)
+                    print(seq_mask.shape, seq.shape)
+                    for j in range(l):
+                        logit = self(seq, mask = seq_mask)
+                        logit = logit[:, -1,:] / 1.0
+                        probs = F.softmax(logit, diim=-1)
+                        idx_next = torch.multinomial(probs, num_samples=1)
+                        x[i][j] = idx_next
+                        seq_mask[-1] += 1
+                    x[i][pred_end] = 0
+                    y[i][pred_end] = 0
+                preds = x[:, context:]
+                true = y[:, context:]
 
-                # x, y, x_mask, y_mask = batch
-                # b,l = x.shape
-                # #logits = self(x[:,-context:], x_mask[:, -context:]) # b,context-1,c0,V
-                # #intermediates = []
-                # preds = torch.zeros((b,1),device=x.device,dtype=x.dtype)
-                # for i in range(l): # store output for the whole sequence TODO: efficiently store output for the last word, just run last AR layer
-                #     '''
-                #     logits = self(x[:,-context:], x_mask[:, -context:], eval=True) # b,c0,V
-                #     canvas = token_embeddings[:,1:,:,:] # b,t-1,c,d
-                #     canvas[:,:,:p,:] = net.reshape(b,t,p,-1)[:,:-1,:,:] # b,t-1,p,d so first t-1 outputs
-                #     tokens_out = self.drop(canvas + in_pe)
-                #     out = self.decoder_blocks(tokens_out.reshape(b*(t-1),c,-1))
-                #     logits = self.head(out.reshape(b,t-1,c,-1)[:,:,p-1:-1,:]) # b,t-1,c0,Vc
-                #     '''
-                #     logits = self(x, x_mask) # b,context-1,c0,V
-                #     logits_ = logits[:, i, :] / 1.0 # b,V
-                #     probs = F.softmax(logits_, dim=-1)
-                #     idx_next = torch.multinomial(probs, num_samples=1)
-                #     preds = torch.cat((preds, idx_next),dim=1)
-                #     #idx = torch.cat((idx, idx_next), dim=1)
-                #     # check if idx_next matches original x[:,-1,i] for unit_acc. or keep aggregating, will retain old preds
-                #     x[:, i] = idx_next.squeeze() # x[:, i] is only used to initialize canvas with hints.
-                #     #intermediates.append(idx_next.squeeze().cpu().tolist())
-                #     #'''
-                # #preds = torch.stack(intermediates, dim=1) # b,c0
-                # #preds = torch.argmax(logits[:,-1],dim=-1) # b,c0
-
-
-                # # (!) change batch idx initialization
-                # # (!) change validation logic
-
-                # preds = preds[:,1:]
-                # true = y
                 if batch_idx == 0:
                     if self.config.base == 'char':
                         rows = [[" ".join(["".join([self.rev[_c] for _c in _word]).strip() for _word in _context]), "".join([self.rev[_c] for _c in _pred]).strip(), "".join([self.rev[_c] for _c in _true]).strip()] for _context, _pred, _true in zip(y[:,-(context+2):-2].cpu().tolist(), preds.cpu().tolist(), true.cpu().tolist())]
