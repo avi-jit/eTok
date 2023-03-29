@@ -17,32 +17,27 @@ logger = logging.getLogger(__name__)
 class SelfAttentionBlock(nn.Module):
     def __init__(self, input_dim, num_heads):
         super().__init__()
-        self.multihead_attention = nn.MultiheadAttention(input_dim, num_heads, batch_frst = True)
+        self.multihead_attention = nn.MultiheadAttention(input_dim, num_heads, batch_first = True)
         self.layer_norm = nn.LayerNorm(input_dim)
     
     def forward(self, x, mask=None):
-        # Compute the self-attention weights and output
         attn_output, _ = self.multihead_attention(x, x, x, attn_mask=mask)
-        
-        # Apply layer normalization and residual connection
         output = self.layer_norm(x + attn_output)
-        return output
+        return output 
 
 class SelfAttentionBlockSequence(nn.Module):
     def __init__(self, input_dim, num_heads, num_layers):
-        super().__init__()
+        super().__init()
         self.blocks = nn.ModuleList([
-            SelfAttentionBlock(input_dim, num_heads) for _ in range(num_layers)
-        ])
+            SelfAttentionBlock(input_dim, num_heads) for _ in range(num_layers)])
     
     def forward(self, x, mask=None):
         for block in self.blocks:
             x = block(x, mask=mask)
         return x
 
-
-
 class myGPT(pl.LightningModule):
+    """  end-to-end tokenized full GPT language model, with a context size of block_size """
     def __init__(self,
                  #e2e_vocab_size=100,
                  num_prefix=0, # 0 for no compression
@@ -188,7 +183,7 @@ class myGPT(pl.LightningModule):
                 continue
             end_idx = (cls_indx[i] != 0).nonzero(as_tuple=True)[0][-1]
             cls_indx_seq_truncated = cls_indx[i, :end_idx+1] # truncated cls indices
-            out[i][cls_indx_seq_truncated] = net[i, :end_idx+1]
+            out[i][cls_indx_seq_truncated] = net[i, :end_idx+1] #(!)huge problem here~
         
         return out
 
@@ -235,7 +230,6 @@ class myGPT(pl.LightningModule):
             out = self.decoder_blocks(tokens_out, mask=e2e_masks)
 
             logits = self.head(out)
-            print(logits.size())
         else:
             logits = self.head(net.reshape(b, t, -1))
         return logits
@@ -255,11 +249,10 @@ class myGPT(pl.LightningModule):
         if y is not None:
             #loss = F.cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1))
             if self.config.num_prefix > 0:
-                logits = logits[:, :-1, :]
+                #logits = logits[:, :-1, :] #
                 B, t, vocab_len = logits.size()
                 logits = torch.reshape(logits, (-1, vocab_len))
-                y = y[:, :-1]
-                y = torch.reshape(y, (-1,))
+                y = torch.reshape(y, (-1,)) #
                 loss = F.cross_entropy(logits, y)
             else:
                 loss = F.cross_entropy(logits.transpose(1,2), y)
@@ -268,34 +261,34 @@ class myGPT(pl.LightningModule):
         self.log("gpu", torch.cuda.memory_allocated() / (1024 ** 3), on_epoch=True, prog_bar=True, logger=True)
         return loss
 
+# generate for e2e subword -> only modified the idx_cond index
     @torch.no_grad()
-    def generate(self, idx, max_new_tokens, temperature=1.0, do_sample=False, top_k=None):
-        """
-        Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
-        the sequence max_new_tokens times, feeding the predictions back into the model each time.
-        Most likely you'll want to make sure to be in model.eval() mode of operation for this.
-        """
+    def generate(self, idx, masks, max_new_tokens, temperature=1.0, do_sample=False, top_k=None):
+
         for _ in range(max_new_tokens):
-            # if the sequence context is growing too long we must crop it at block_size
             idx_cond = idx if idx.size(1) <= self.config.block_size else idx[:, -self.config.block_size:]
-            # forward the model to get the logits for the index in the sequence
-            logits = self(idx_cond)
-            # pluck the logits at the final step and scale by desired temperature
+            logits = self(idx_cond, masks)
             logits = logits[:, -1, :] / temperature
-            # optionally crop the logits to only the top k options
+            # (?) how to use top_k in probs
             if top_k is not None:
                 v, _ = torch.topk(logits, top_k)
                 logits[logits < v[:, [-1]]] = -float('Inf')
-            # apply softmax to convert logits to (normalized) probabilities
             probs = F.softmax(logits, dim=-1)
-            # either sample from the distribution or take the most likely element
             if do_sample:
-                idx_next = torch.multinomial(probs, num_samples=1)
+                idx_next = torch.multinomial(probs, k=1, dim=-1)
             else:
                 _, idx_next = torch.topk(probs, k=1, dim=-1)
-            # append sampled index to the running sequence and continue
             idx = torch.cat((idx, idx_next), dim=1)
+
+            for i in range(masks.size(0)):
+                if(masks[i].eq(0).all()):
+                    continue
+                last_nonzero_indx = masks[i].nonzero().max()
+                masks[i][last_nonzero_indx] += 1
+
+            
         return idx
+
 
     def validation_step(self, batch, batch_idx):
         logging_batch_idx = -1 
@@ -340,7 +333,7 @@ class myGPT(pl.LightningModule):
                 elif self.config.base in ['sub','byte']:
                     rows = [[self.config.vocab.decode(_context), self.config.vocab.decode([_c for _c in _pred if _c!=0]), self.config.vocab.decode([_c for _c in _true if _c!=0]).strip() ] for _context, _pred, _true in zip(inputs.cpu().tolist(), out.cpu().tolist(), answers.cpu().tolist() ) ]
         else:
-             # b,c0 # note: (x[:,1]==y[:,0]).all()
+            # b,c0 # note: (x[:,1]==y[:,0]).all()
             if self.config.base == 'word':
                 x,y = batch
                 b,l = x.shape
@@ -350,50 +343,45 @@ class myGPT(pl.LightningModule):
                 if batch_idx == logging_batch_idx:
                     rows = [[" ".join([self.rev[_c] for _c in _context]), self.rev[_pred], self.rev[_true].strip()] for _context, _pred, _true in zip(x[:,-context:].cpu().tolist(), preds.cpu().tolist(), true.cpu().tolist())]
             else: # e2e
-                # ---
-                x, _, _, _ = batch
-                x = x[:context] # (!) context: total num of tokens, not context length
-                y = torch.clone(x)
-                B, t = x.size()
-                for i in range(B):
-                    x_start_idx = torch.where(x[i] == self.config.vocab(self.cls_token)['input_ids'][0])[0]
-                    cls_heads_shifted = torch.roll(x_start_idx, shifts=-1, dims=0)
-                    cls_heads_shifted[-1] = context
-                    x_mask = cls_heads_shifted - x_start_idx
-                    pred_start = x_start_idx[-2] # last full word
-                    pred_end = x_start_idx[-1] # last full word end +1 (pos of last cls)
-                    l = pred_end - pred_start
-                    seq = x[i]
-                    seq = seq[:pred_start]
-                    seq = seq.unsqueeze(0)
-                    seq_mask = x_mask
-                    seq_mask = seq_mask.unsqueeze(0) #[1, context]
-                    seq_mask = torch.cat((seq_mask, torch.zeros(seq_mask.shape[0], 1).to(seq_mask.device)), dim=-1)
-                    seq_mask = F.pad(seq_mask, (0, 1+context - (y_mask.shape)[-1]), mode='constant', value=0)
-                    print(seq_mask.shape, seq.shape)
-                    for j in range(l):
-                        logit = self(seq, mask = seq_mask)
-                        logit = logit[:, -1,:] / 1.0
-                        probs = F.softmax(logit, diim=-1)
-                        idx_next = torch.multinomial(probs, num_samples=1)
-                        x[i][j] = idx_next
-                        seq_mask[-1] += 1
-                    x[i][pred_end] = 0
-                    y[i][pred_end] = 0
-                preds = x
-                true = y
+                x, y, _, _ = batch
+                B, t = x.shape
+                inputs = torch.zeros((b, context), dtype=x.dtype, device=x.device)
+                answers = torch.zeros((b, max_new_tokens), dtype=x.dtype, device=x.device)
+                lens = torch.zeros(b, dtype=x.dtype, device=x.device)
+                masks = torch.zeros((b, context), dtype=torch.long, device=x.device) #(!)
+                for i, row in enumerate(x):
+                    if self.config.base == 'sub':
+                        
+                        cls_heads = torch.where(row == self.config.vocab(self.cls_token)['input_ids'][0])[0]
+                        last_word_beg, last_word_end = cls_heads[-2], cls_heads[-1]
+                        inputs[i] = row[last_word_beg - context+1:last_word_beg+1]
+                        inputs[i][0] = self.config.vocab(self.cls_token)['input_ids'][0] # such a bad hypothesis
+                        
+                        cls_heads = torch.where(inputs[i] == self.config.vocab(self.cls_token)['input_ids'][0])[0]
+                        cls_heads_shifted = torch.roll(cls_heads, shifts=-1, dims=0)
+                        #cls_heads_shifted[-1] = inputs[i].size()[-1]
+                        cls_heads_shifted[-1] = context
+                        mask = cls_heads_shifted - cls_heads
+                        x_mask = torch.tensor(mask, dtype=torch.long)
+                        x_mask = torch.nn.functional.pad(x_mask, (0, context - (x_mask.shape)[-1]), mode='constant', value=0)
+                        masks[i] = x_mask #pad to block_size (!)
 
-                if batch_idx == 0:
-                    if self.config.base == 'char':
-                        rows = [[" ".join(["".join([self.rev[_c] for _c in _word]).strip() for _word in _context]), "".join([self.rev[_c] for _c in _pred]).strip(), "".join([self.rev[_c] for _c in _true]).strip()] for _context, _pred, _true in zip(y[:,-(context+2):-2].cpu().tolist(), preds.cpu().tolist(), true.cpu().tolist())]
-                    elif self.config.base in ['sub','byte']:
+                        now_len = last_word_end - last_word_beg
+                        answers[i, :now_len-1] = row[last_word_beg+1:last_word_end]
+                        lens[i] = now_len
+
+
+                # based on how answer is defined, need to change answer
+                out = self.generate(inputs, masks, max_new_tokens=max_new_tokens, temperature=1.0, do_sample=True, top_k=None)
+                out = out[:, context:]
+                mask = torch.arange(max_new_tokens, device=x.device).expand(len(lens), max_new_tokens) < lens.unsqueeze(1)
+                corrects = (out==answers)*mask
+                acc_unit = corrects.sum()/mask.sum()
+                acc_word = (corrects.float() + (1- mask.float())).bool().all(dim=-1).float().mean()
+                if batch_idx == logging_batch_idx:
+                    if self.config.base == 'sub':
                         rows = [[" ".join([self.config.vocab.decode([_c for _c in seq if _c != 0])]), self.config.vocab.decode([_c for _c in _pred if _c != 0]), self.config.vocab.decode([_c for _c in _true if _c != 0]).strip()] for seq, _pred, _true in zip(x.cpu().tolist(), preds.cpu().tolist(), true.cpu().tolist())]
-            corrects = (preds==true)
-            acc_unit = (corrects*(true!=0).float()).sum() / (true!=0).float().sum() # sub/char TODO: exclude 0s
-            if self.config.base == 'word':
-                acc_word = acc_unit
-            else:
-                acc_word = corrects.all(dim=-1).float().mean()
+
         if batch_idx == logging_batch_idx:
             headers = ["context", "pred", "true"]
             #rows.insert(0, headers)
