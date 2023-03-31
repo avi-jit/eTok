@@ -178,6 +178,12 @@ class myGPT(pl.LightningModule):
 
     
     def _shift_first_zero(self, cls_indx, out):
+        B, t, _ =  out.size()
+        out_new = torch.zeros((B, t, _), device=out.device)
+        for i in range(B):
+            out_new[i] = torch.roll(out[i], shifts=-cls_indx[i][1], dims=0)
+        return out
+            
         
     def _get_canvas(self, out, net, cls_indx, mask):
         B, t, _ = out.size()
