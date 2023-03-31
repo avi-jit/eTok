@@ -198,8 +198,8 @@ class myGPT(pl.LightningModule):
             out[i][cls_indx_delete_first] = net[i, :end_idx] #(!)huge problem here~
             out[i][:cls_indx_delete_first[0]] = 0
             #out_new[i] = torch.roll(out[i], shifts=-cls_indx_delete_first[0], dims=0)
-            mask[i][:cls_indx_delete_first[0], :] = 1
-            mask[i][:, :cls_indx_delete_first[0]] = 1
+            mask[i][:cls_indx_delete_first[0], :] = 0
+            mask[i][:, :cls_indx_delete_first[0]] = 0
             
         return out, mask
 
