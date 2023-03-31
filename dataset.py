@@ -337,7 +337,7 @@ class myDataset(Dataset):
             y = y[cls_heads[1]:]
             y = y[1:]
             y = y[:self.block_size - (cls_heads[1]-cls_heads[0])]
-            y_mask = NULL
+            y_mask = None
             
             
             y = torch.nn.functional.pad(y, (0, self.block_size - (y.shape)[-1]), mode='constant', value=0)
