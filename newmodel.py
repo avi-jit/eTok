@@ -176,16 +176,26 @@ class myGPT(pl.LightningModule):
         cls_out = torch.nn.utils.rnn.pad_sequence(cls_out, batch_first = True)
         return cls_out
 
-    def _get_canvas(self, out, net, cls_indx):
+    
+    def _shift_first_zero(self, cls_indx, out):
+        
+    def _get_canvas(self, out, net, cls_indx, mask):
         B, t, _ = out.size()
+        #out_new = torch.zeros((B, t, _), device=out.device)
         for i in range(B):
             if(cls_indx[i].eq(0).all()): #(!) why continue
                 continue
             end_idx = (cls_indx[i] != 0).nonzero(as_tuple=True)[0][-1]
             cls_indx_seq_truncated = cls_indx[i, :end_idx+1] # truncated cls indices
-            out[i][cls_indx_seq_truncated] = net[i, :end_idx+1] #(!)huge problem here~
-        
-        return out
+            cls_indx_delete_first = torch.roll(cls_indx_seq_truncated, shifts=-1, dims=0)
+            cls_indx_delete_first = cls_indx_delete_first[:-1]
+            out[i][cls_indx_delete_first] = net[i, :end_idx] #(!)huge problem here~
+            out[i][:cls_indx_delete_first[0]] = 0
+            #out_new[i] = torch.roll(out[i], shifts=-cls_indx_delete_first[0], dims=0)
+            mask[i][:cls_indx_delete_first[0], :] = 1
+            mask[i][:, :cls_indx_delete_first[0]] = 1
+            
+        return out, mask
 
 #(!) positional embedding not changed
     def forward(self, idx, mask=None, eval=False): # based on assumption, prefix is added before forward function
@@ -223,12 +233,13 @@ class myGPT(pl.LightningModule):
             if eval:
                 return net #(?) don't really understand what does original reshape mean
             
-            canvas = self._get_canvas(out, net, cls_indx)
+            canvas, e2e_masks = self._get_canvas(out, net, cls_indx, e2e_masks)
             B, t_canvas, _ = canvas.shape
             canvas_pe = self.in_pe[:, :t_canvas, :] 
             tokens_out = self.drop(canvas+canvas_pe) #[B, t, embd]
+            
             out = self.decoder_blocks(tokens_out, mask=e2e_masks)
-
+            out = self._shift_first_zero(out)
             logits = self.head(out)
         else:
             logits = self.head(net.reshape(b, t, -1))
