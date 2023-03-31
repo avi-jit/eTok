@@ -245,7 +245,7 @@ class myGPT(pl.LightningModule):
             tokens_out = self.drop(canvas+canvas_pe) #[B, t, embd]
             
             out = self.decoder_blocks(tokens_out, mask=e2e_masks)
-            out = self._shift_first_zero(out)
+            out = self._shift_first_zero(cls_indx, out)
             logits = self.head(out)
         else:
             logits = self.head(net.reshape(b, t, -1))
