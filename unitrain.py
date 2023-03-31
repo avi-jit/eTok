@@ -59,9 +59,9 @@ def main(
         vocab = model.config.vocab
         #maxlen = model.config.maxlen
         
-    CACHE_DIR="/nas/ckgfs/users/thawani/hf_cache/datasets" # default ~/.cache/huggingface/datasets
+    CACHE_DIR="/home1/xzhu9839/data" # default ~/.cache/huggingface/datasets
     if DATASET == 'shakespeare': # one line of poem is roughly 50 characters
-        text = open(r'C:\Users\lenovo\OneDrive\Desktop\Project\eToK\eTok-Compressed_Dim_Version\tinyshake.txt', 'r').read() # don't worry we won't run out of file handles
+        text = open(r'/home1/xzhu9839/data/tinyshake.txt', 'r').read() # don't worry we won't run out of file handles
     elif DATASET == 'wiki':
         text = ' '.join(datasets.load_dataset("wikitext", "wikitext-2-v1", split="train", cache_dir=CACHE_DIR)['text'])
     elif DATASET == 'mc4':
@@ -121,7 +121,7 @@ def main(
         log_model_checkpoints=False,
         #name=f"{DATASET} {'-'.join(langs)} {model_type}{model.config.num_prefix} {base} {output_type} {batch_size}bs {block_size}bl"
     )'''   
-    logger = pl.loggers.WandbLogger(project="etok", save_dir='/nas/ckgfs/users/thawani/etok/')
+    logger = pl.loggers.WandbLogger(project="etok", save_dir='/home1/xzhu9839/data/etok/')
     #wandb.run.name = f"{DATASET} {'-'.join(langs)} {model_type}{model.config.num_prefix} {base} {output_type} {batch_size}bs {block_size}bl {'-'.join(wandb.run.name.split('-')[:2])}"
     wandb.run.name = f"{'debug_' if debug else ''}{NUM_PREFIX if do_e2e else ''}_{base}_{DATASET}_{logger.experiment.name}_{EPOCHS}ep"
     #logger.log_hyperparams(params=model.config)
@@ -170,7 +170,7 @@ def main(
                         #log_every_n_steps=15,
                         logger=logger,
                         val_check_interval=0.25,
-                        default_root_dir="/nas/ckgfs/users/thawani/etok/checkpoints/",
+                        default_root_dir="/home1/xzhu9839/data/checkpoints/",
                         )
         #trainer.fit(model, train_loader)
         #model.hparams.itoc = None
@@ -188,7 +188,7 @@ def main(
                             gradient_clip_val=1.0, 
                             logger=logger,
                             val_check_interval=0.25,
-                            default_root_dir="/nas/ckgfs/users/thawani/etok/checkpoints/",
+                            default_root_dir="/home1/xzhu9839/data/checkpoints/",
                             )
             trainer.validate(model=model, dataloaders=[val_loader])
                
@@ -236,5 +236,5 @@ if __name__ == "__main__":
         main(DATASET=args.dataset, DEVICE=args.device, NUM_PREFIX=args.num_prefix, base=args.base, do_e2e=args.e2e, EPOCHS=args.num_epochs, 
              block_size=args.block_size, batch_size=args.batch_size, debug=False)
     else:
-        main(LOAD_CKPT=f"/nas/ckgfs/users/thawani/etok/checkpoints/etok/{args.ckpt}/checkpoints/epoch=49-step=9800.ckpt", DEVICE=2, DATASET="shakespeare") # word
+        main(LOAD_CKPT=f"/home1/xzhu9839/data/etok/etok/ow9k0juj/checkpoints/epoch=110-step=113075.ckpt", DEVICE=2, DATASET="shakespeare") # word
 # nohup python unitrain.py -dataset shakespeare -base sub --no-e2e --device 2 &
