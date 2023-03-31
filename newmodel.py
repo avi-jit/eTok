@@ -27,7 +27,7 @@ class SelfAttentionBlock(nn.Module):
 
 class SelfAttentionBlockSequence(nn.Module):
     def __init__(self, input_dim, num_heads, num_layers):
-        super().__init()
+        super().__init__()
         self.blocks = nn.ModuleList([
             SelfAttentionBlock(input_dim, num_heads) for _ in range(num_layers)])
     
