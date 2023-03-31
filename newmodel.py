@@ -181,7 +181,7 @@ class myGPT(pl.LightningModule):
         B, t, _ =  out.size()
         out_new = torch.zeros((B, t, _), device=out.device)
         for i in range(B):
-            out_new[i] = torch.roll(out[i], shifts=-cls_indx[i][1], dims=0)
+            out_new[i] = torch.roll(out[i], shifts=-cls_indx[i][1].item(), dims=0)
         return out
             
         
