@@ -292,7 +292,8 @@ class myGPT(pl.LightningModule):
                 logits[logits < v[:, [-1]]] = -float('Inf')
             probs = F.softmax(logits, dim=-1)
             if do_sample:
-                idx_next = torch.multinomial(probs, k=1, dim=-1)
+                #idx_next = torch.multinomial(probs, k=1, dim=-1)
+                idx_next = torch.multinomial(probs, num_samples=1)
             else:
                 _, idx_next = torch.topk(probs, k=1, dim=-1)
             idx = torch.cat((idx, idx_next), dim=1)
