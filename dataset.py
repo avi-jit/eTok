@@ -335,10 +335,16 @@ class myDataset(Dataset):
             
             y = torch.tensor(idxs)
             y = y[cls_heads[1]:]
+            y = y[1:]
             y = y[:self.block_size - (cls_heads[1]-cls_heads[0])]
-            y_mask = self.__idx_mask__(y)
+            y_mask = NULL
+            
+            
+            y = torch.nn.functional.pad(y, (0, self.block_size - (y.shape)[-1]), mode='constant', value=0)
+            x_mask = torch.nn.functional.pad(x_mask, (0, self.block_size - (x_mask.shape)[-1]), mode='constant', value=0)
+            #y_mask = torch.nn.functional.pad(y_mask, (0, self.block_size - (y_mask.shape)[-1]), mode='constant', value=0)
+            
             return x, y, x_mask, y_mask
-            # (!) x, y are padded too !!!!
         else: # chunk has block_size chars/bytes/subwords
             if self.base == 'word':
                 idxs = [self.vocab[_] for _ in chunk]
