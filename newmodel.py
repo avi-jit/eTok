@@ -361,7 +361,7 @@ class myGPT(pl.LightningModule):
                     rows = [[" ".join([self.rev[_c] for _c in _context]), self.rev[_pred], self.rev[_true].strip()] for _context, _pred, _true in zip(x[:,-context:].cpu().tolist(), preds.cpu().tolist(), true.cpu().tolist())]
             else: # e2e
                 x, y, _, _ = batch
-                B, t = x.shape
+                b, t = x.shape
                 inputs = torch.zeros((b, context), dtype=x.dtype, device=x.device)
                 answers = torch.zeros((b, max_new_tokens), dtype=x.dtype, device=x.device)
                 lens = torch.zeros(b, dtype=x.dtype, device=x.device)
