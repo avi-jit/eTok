@@ -7,6 +7,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 import pytorch_lightning as pl
 import torchmetrics
+import csv
 
 from mingpt.model import Block
 
@@ -33,6 +34,10 @@ class myGPT(pl.LightningModule):
                  vocab=None,
                  base='char', # 'char' 'sub' 'word' 'byte'
                  canvas_size = 12,
+                 batch_size = None,
+                 lang = None,
+                 dataset = None,
+                 save_to_val_csv=False,
                  ):
         super().__init__()
         # auto creates self.hparams from the method signature
@@ -78,7 +83,7 @@ class myGPT(pl.LightningModule):
             self.head = nn.Linear(n_embd, len(vocab), bias=False)
         else:
             self.head = nn.Linear(n_embd, len(vocab), bias=False)
-            self.acc= {k:torchmetrics.Accuracy(top_k=k,mdmc_average='global') for k in [1,5,25]}
+            # self.acc= {k:torchmetrics.Accuracy(top_k=k,mdmc_average='global') for k in [1,5,25]}
 
         self.apply(self._init_weights)
         logger.info("number of parameters: %e", sum(p.numel() for p in self.parameters()))
@@ -203,16 +208,17 @@ class myGPT(pl.LightningModule):
         return idx
 
     def validation_step(self, batch, batch_idx):
+        save_to_csv=self.config.save_to_val_csv
+        # rev = {k:v for v,k in self.config.vocab.items()}
         logging_batch_idx = -1 
         #self.log('val_loss', self.training_step(batch, batch_idx, eval=True), on_step=False, on_epoch=True, logger=True)
-        context=90
-        max_new_tokens=30
+        context=self.config.canvas_size*2
+        max_new_tokens=self.config.canvas_size + 30
         if self.config.base == 'char':
             space_token = 0
         elif self.config.base == 'byte':
             space_token = 35
             #context=30
-            max_new_tokens=60
         if self.config.num_prefix == 0 and self.config.base != 'word':
             x,y = batch
             b,l = x.shape
@@ -223,6 +229,7 @@ class myGPT(pl.LightningModule):
             for i,row in enumerate(x):
                 if self.config.base in ['char','byte']:
                     spaces = (row==space_token).nonzero()
+                    ### Place where issue is for other languages
                     last_word_beg, last_word_end = spaces[-2][0], spaces[-1][0]+1 # last full word
                     inputs[i] = row[last_word_beg - context+1:last_word_beg+1] # +1 to include space
                     answers[i,:last_word_end-last_word_beg-1] = row[last_word_beg+1:last_word_end]
@@ -239,7 +246,8 @@ class myGPT(pl.LightningModule):
             corrects = (out==answers)*mask # if gt is bank, banker should be wrong.
             acc_unit = corrects.sum()/mask.sum() # sub/char
             acc_word = (corrects.float() + (1- mask.float())).bool().all(dim=-1).float().mean() # TODO: sub: penalize prefix match
-            if batch_idx == logging_batch_idx:
+            # if batch_idx == logging_batch_idx:
+            if save_to_csv:
                 if self.config.base == 'char':
                     rows = [["".join([self.rev[_c] for _c in _context]).strip(), "".join([self.rev[_c] for _c in _pred]).strip(), "".join([self.rev[_c] for _c in _true]).strip()] for _context, _pred, _true in zip(inputs.cpu().tolist(), out.cpu().tolist(), answers.cpu().tolist()) ]
                 elif self.config.base in ['sub','byte']:
@@ -252,7 +260,8 @@ class myGPT(pl.LightningModule):
                 logits = self(x[:,-context:])
                 preds = torch.argmax(logits[:,-1],dim=-1) # b
                 true = y[:,-1]
-                if batch_idx == logging_batch_idx:
+                if save_to_csv:
+                # if batch_idx == logging_batch_idx:
                     rows = [[" ".join([self.rev[_c] for _c in _context]), self.rev[_pred], self.rev[_true].strip()] for _context, _pred, _true in zip(x[:,-context:].cpu().tolist(), preds.cpu().tolist(), true.cpu().tolist())]
             else: # e2e
                 x, y, x_mask, y_mask = batch
@@ -283,7 +292,8 @@ class myGPT(pl.LightningModule):
                 #preds = torch.argmax(logits[:,-1],dim=-1) # b,c0
                 preds = preds[:,1:]
                 true = y[:,-2]
-                if batch_idx == 0:
+                if save_to_csv:
+                # if batch_idx == 0:
                     if self.config.base == 'char':
                         rows = [[" ".join(["".join([self.rev[_c] for _c in _word]).strip() for _word in _context]), "".join([self.rev[_c] for _c in _pred]).strip(), "".join([self.rev[_c] for _c in _true]).strip()] for _context, _pred, _true in zip(y[:,-(context+2):-2].cpu().tolist(), preds.cpu().tolist(), true.cpu().tolist())]
                     elif self.config.base in ['sub','byte']:
@@ -294,10 +304,16 @@ class myGPT(pl.LightningModule):
                 acc_word = acc_unit
             else:
                 acc_word = corrects.all(dim=-1).float().mean()
-        if batch_idx == logging_batch_idx:
-            headers = ["context", "pred", "true"]
+        # if batch_idx == logging_batch_idx:
+        if save_to_csv:
+            # headers = ["context", "pred", "true"]
+            with open(f"val_output_{self.config.dataset}_{self.config.lang}_{self.config.base}_{'no-e2e' if self.config.num_prefix == 0 else 'e2e'}_{self.config.learning_rate}_{self.config.num_prefix}_{self.config.batch_size}.csv", 'a+', newline='') as val_csv:
+                writer = csv.writer(val_csv, delimiter=',')
+                for row in rows:
+                    writer.writerow(row)
+            print(f"val_output_{self.config.dataset}_{self.config.lang}_{self.config.base}_{'no-e2e' if self.config.num_prefix == 0 else 'e2e'}_{self.config.learning_rate}_{self.config.num_prefix}_{self.config.batch_size}.csv")
             #rows.insert(0, headers)
-            self.logger.experiment.log_table("predictions.csv", [[f"\"{cell}\"" for cell in row] for row in rows], headers=headers)
+            # self.logger.experiment.log_table("predictions.csv", [[f"\"{cell}\"" for cell in row] for row in rows], headers=headers)
         #rev = {k:v for v,k in self.config.vocab.items()}
         self.log("gpu", torch.cuda.memory_allocated() / (1024 ** 3), on_epoch=True, prog_bar=True, logger=True)
         self.log('acc_unit', acc_unit, on_step=True, on_epoch=True, prog_bar=True, logger=True)

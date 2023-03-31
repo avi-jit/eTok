@@ -7,4 +7,10 @@ __pycache__/
 .vscode/
 .neptune/
 .cometml-runs/
-
+slurm_logs/
+val_outputs/
+configs/
+slurm-*
+val_output_*
+base_metrics/
+train/

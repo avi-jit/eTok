@@ -1,0 +1,506 @@
+{
+    "val_output_custom_en_byte_e2e_0.0001_4_8.csv": {
+        "high_freq_words": {
+            "accuracy": 0.5324675324675324,
+            "no_of_samples": 924
+        },
+        "mid_freq_words": {
+            "accuracy": 0.1702127659574468,
+            "no_of_samples": 141
+        },
+        "low_freq_words": {
+            "accuracy": 0.13445378151260504,
+            "no_of_samples": 119
+        },
+        "undefined_freq_words": {
+            "accuracy": 0.7135922330097088,
+            "no_of_samples": 206
+        }
+    },
+    "val_output_custom_en_byte_no-e2e_0.0001_0_8.csv": {
+        "high_freq_words": {
+            "accuracy": 0.14304315476190477,
+            "no_of_samples": 5376
+        },
+        "mid_freq_words": {
+            "accuracy": 0.002911208151382824,
+            "no_of_samples": 687
+        },
+        "low_freq_words": {
+            "accuracy": 0.0031746031746031746,
+            "no_of_samples": 630
+        },
+        "undefined_freq_words": {
+            "accuracy": 0.2476894639556377,
+            "no_of_samples": 1082
+        }
+    },
+    "val_output_custom_en_char_e2e_0.0001_4_8.csv": {
+        "high_freq_words": {
+            "accuracy": 0.5289617486338798,
+            "no_of_samples": 915
+        },
+        "mid_freq_words": {
+            "accuracy": 0.23636363636363636,
+            "no_of_samples": 165
+        },
+        "low_freq_words": {
+            "accuracy": 0.10619469026548672,
+            "no_of_samples": 113
+        },
+        "undefined_freq_words": {
+            "accuracy": 0.6700507614213198,
+            "no_of_samples": 197
+        }
+    },
+    "val_output_custom_en_char_no-e2e_0.0001_0_8.csv": {
+        "high_freq_words": {
+            "accuracy": 0.13214219244369999,
+            "no_of_samples": 5373
+        },
+        "mid_freq_words": {
+            "accuracy": 0.004411764705882353,
+            "no_of_samples": 680
+        },
+        "low_freq_words": {
+            "accuracy": 0.0,
+            "no_of_samples": 625
+        },
+        "undefined_freq_words": {
+            "accuracy": 0.2652689152233364,
+            "no_of_samples": 1097
+        }
+    },
+    "val_output_custom_en_sub_e2e_0.0001_4_8.csv": {
+        "high_freq_words": {
+            "accuracy": 0.6066298342541436,
+            "no_of_samples": 905
+        },
+        "mid_freq_words": {
+            "accuracy": 0.12,
+            "no_of_samples": 125
+        },
+        "low_freq_words": {
+            "accuracy": 0.012738853503184714,
+            "no_of_samples": 157
+        },
+        "undefined_freq_words": {
+            "accuracy": 0.7832512315270936,
+            "no_of_samples": 203
+        }
+    },
+    "val_output_custom_en_word_no-e2e_0.0001_0_8.csv": {
+        "high_freq_words": {
+            "accuracy": 0.6263616557734205,
+            "no_of_samples": 918
+        },
+        "mid_freq_words": {
+            "accuracy": 0.006622516556291391,
+            "no_of_samples": 151
+        },
+        "low_freq_words": {
+            "accuracy": 0.0,
+            "no_of_samples": 130
+        },
+        "undefined_freq_words": {
+            "accuracy": 0.7225130890052356,
+            "no_of_samples": 191
+        }
+    },
+    "val_output_custom_fr_byte_e2e_0.0001_4_8.csv": {
+        "high_freq_words": {
+            "accuracy": 0.4699248120300752,
+            "no_of_samples": 1064
+        },
+        "mid_freq_words": {
+            "accuracy": 0.21568627450980393,
+            "no_of_samples": 153
+        },
+        "low_freq_words": {
+            "accuracy": 0.07042253521126761,
+            "no_of_samples": 142
+        },
+        "undefined_freq_words": {
+            "accuracy": 0.6775510204081633,
+            "no_of_samples": 245
+        }
+    },
+    "val_output_custom_fr_char_e2e_0.0001_4_8.csv": {
+        "high_freq_words": {
+            "accuracy": 0.5647619047619048,
+            "no_of_samples": 1050
+        },
+        "mid_freq_words": {
+            "accuracy": 0.2913907284768212,
+            "no_of_samples": 151
+        },
+        "low_freq_words": {
+            "accuracy": 0.10067114093959731,
+            "no_of_samples": 149
+        },
+        "undefined_freq_words": {
+            "accuracy": 0.8228346456692913,
+            "no_of_samples": 254
+        }
+    },
+    "val_output_custom_fr_sub_e2e_0.0001_4_8.csv": {
+        "high_freq_words": {
+            "accuracy": 0.40190476190476193,
+            "no_of_samples": 1050
+        },
+        "mid_freq_words": {
+            "accuracy": 0.0,
+            "no_of_samples": 142
+        },
+        "low_freq_words": {
+            "accuracy": 0.01948051948051948,
+            "no_of_samples": 154
+        },
+        "undefined_freq_words": {
+            "accuracy": 0.7441860465116279,
+            "no_of_samples": 258
+        }
+    },
+    "val_output_custom_fr_sub_no-e2e_0.0001_0_8.csv": {
+        "high_freq_words": {
+            "accuracy": 0.2808310991957105,
+            "no_of_samples": 5968
+        },
+        "mid_freq_words": {
+            "accuracy": 0.028409090909090908,
+            "no_of_samples": 704
+        },
+        "low_freq_words": {
+            "accuracy": 0.012618296529968454,
+            "no_of_samples": 634
+        },
+        "undefined_freq_words": {
+            "accuracy": 0.31828793774319064,
+            "no_of_samples": 1285
+        }
+    },
+    "val_output_custom_fr_word_no-e2e_0.0001_0_8.csv": {
+        "high_freq_words": {
+            "accuracy": 0.6545284780578898,
+            "no_of_samples": 1071
+        },
+        "mid_freq_words": {
+            "accuracy": 0.0,
+            "no_of_samples": 146
+        },
+        "low_freq_words": {
+            "accuracy": 0.0,
+            "no_of_samples": 138
+        },
+        "undefined_freq_words": {
+            "accuracy": 0.7791164658634538,
+            "no_of_samples": 249
+        }
+    },
+    "val_output_custom_ru_byte_e2e_0.0001_4_8.csv": {
+        "high_freq_words": {
+            "accuracy": 0.4913294797687861,
+            "no_of_samples": 519
+        },
+        "mid_freq_words": {
+            "accuracy": 0.20304568527918782,
+            "no_of_samples": 197
+        },
+        "low_freq_words": {
+            "accuracy": 0.08247422680412371,
+            "no_of_samples": 291
+        },
+        "undefined_freq_words": {
+            "accuracy": 0.7441860465116279,
+            "no_of_samples": 215
+        }
+    },
+    "val_output_custom_ru_byte_no-e2e_0.0001_0_8.csv": {
+        "high_freq_words": {
+            "accuracy": 0.03989145183175034,
+            "no_of_samples": 3685
+        },
+        "mid_freq_words": {
+            "accuracy": 0.0,
+            "no_of_samples": 1153
+        },
+        "low_freq_words": {
+            "accuracy": 0.0,
+            "no_of_samples": 1701
+        },
+        "undefined_freq_words": {
+            "accuracy": 0.14886285320468642,
+            "no_of_samples": 1451
+        }
+    },
+    "val_output_custom_ru_char_e2e_0.0001_4_8.csv": {
+        "high_freq_words": {
+            "accuracy": 0.5225563909774437,
+            "no_of_samples": 532
+        },
+        "mid_freq_words": {
+            "accuracy": 0.2602040816326531,
+            "no_of_samples": 196
+        },
+        "low_freq_words": {
+            "accuracy": 0.1366906474820144,
+            "no_of_samples": 278
+        },
+        "undefined_freq_words": {
+            "accuracy": 0.6851851851851852,
+            "no_of_samples": 216
+        }
+    },
+    "val_output_custom_ru_char_no-e2e_0.0001_0_8.csv": {
+        "high_freq_words": {
+            "accuracy": 0.1,
+            "no_of_samples": 3650
+        },
+        "mid_freq_words": {
+            "accuracy": 0.006650041562759767,
+            "no_of_samples": 1203
+        },
+        "low_freq_words": {
+            "accuracy": 0.001145475372279496,
+            "no_of_samples": 1746
+        },
+        "undefined_freq_words": {
+            "accuracy": 0.31272465851905107,
+            "no_of_samples": 1391
+        }
+    },
+    "val_output_custom_ru_sub_e2e_0.0001_4_8.csv": {
+        "high_freq_words": {
+            "accuracy": 0.5755813953488372,
+            "no_of_samples": 516
+        },
+        "mid_freq_words": {
+            "accuracy": 0.2422680412371134,
+            "no_of_samples": 194
+        },
+        "low_freq_words": {
+            "accuracy": 0.12323943661971831,
+            "no_of_samples": 284
+        },
+        "undefined_freq_words": {
+            "accuracy": 0.7105263157894737,
+            "no_of_samples": 228
+        }
+    },
+    "val_output_custom_ru_sub_no-e2e_0.0001_0_8.csv": {
+        "high_freq_words": {
+            "accuracy": 0.0789818945158751,
+            "no_of_samples": 3811
+        },
+        "mid_freq_words": {
+            "accuracy": 0.0017064846416382253,
+            "no_of_samples": 1172
+        },
+        "low_freq_words": {
+            "accuracy": 0.0005924170616113745,
+            "no_of_samples": 1688
+        },
+        "undefined_freq_words": {
+            "accuracy": 0.21152388172858225,
+            "no_of_samples": 1319
+        }
+    },
+    "val_output_custom_ru_word_no-e2e_0.0001_0_8.csv": {
+        "high_freq_words": {
+            "accuracy": 0.8832116788321168,
+            "no_of_samples": 548
+        },
+        "mid_freq_words": {
+            "accuracy": 0.03333333333333333,
+            "no_of_samples": 180
+        },
+        "low_freq_words": {
+            "accuracy": 0.0034602076124567475,
+            "no_of_samples": 289
+        },
+        "undefined_freq_words": {
+            "accuracy": 0.7951219512195122,
+            "no_of_samples": 205
+        }
+    },
+    "val_output_shakespeare_en_byte_e2e_0.0001_4_8.csv": {
+        "high_freq_words": {
+            "accuracy": 0.825503355704698,
+            "no_of_samples": 149
+        },
+        "mid_freq_words": {
+            "accuracy": 0.6764705882352942,
+            "no_of_samples": 34
+        },
+        "low_freq_words": {
+            "accuracy": 0.5,
+            "no_of_samples": 22
+        },
+        "undefined_freq_words": {
+            "accuracy": 0.8947368421052632,
+            "no_of_samples": 57
+        }
+    },
+    "val_output_shakespeare_en_byte_no-e2e_0.0001_0_8.csv": {
+        "high_freq_words": {
+            "accuracy": 0.296398891966759,
+            "no_of_samples": 722
+        },
+        "mid_freq_words": {
+            "accuracy": 0.07608695652173914,
+            "no_of_samples": 92
+        },
+        "low_freq_words": {
+            "accuracy": 0.041666666666666664,
+            "no_of_samples": 96
+        },
+        "undefined_freq_words": {
+            "accuracy": 0.41924398625429554,
+            "no_of_samples": 291
+        }
+    },
+    "val_output_shakespeare_en_char_e2e_0.0001_4_8.csv": {
+        "high_freq_words": {
+            "accuracy": 0.7712418300653595,
+            "no_of_samples": 153
+        },
+        "mid_freq_words": {
+            "accuracy": 0.7083333333333334,
+            "no_of_samples": 24
+        },
+        "low_freq_words": {
+            "accuracy": 0.42857142857142855,
+            "no_of_samples": 28
+        },
+        "undefined_freq_words": {
+            "accuracy": 0.9122807017543859,
+            "no_of_samples": 57
+        }
+    },
+    "val_output_shakespeare_en_char_no-e2e_0.0001_0_8.csv": {
+        "high_freq_words": {
+            "accuracy": 0.35399449035812675,
+            "no_of_samples": 726
+        },
+        "mid_freq_words": {
+            "accuracy": 0.18181818181818182,
+            "no_of_samples": 99
+        },
+        "low_freq_words": {
+            "accuracy": 0.05102040816326531,
+            "no_of_samples": 98
+        },
+        "undefined_freq_words": {
+            "accuracy": 0.39568345323741005,
+            "no_of_samples": 278
+        }
+    },
+    "val_output_shakespeare_en_sub_e2e_0.0001_4_8.csv": {
+        "high_freq_words": {
+            "accuracy": 0.717948717948718,
+            "no_of_samples": 156
+        },
+        "mid_freq_words": {
+            "accuracy": 0.38461538461538464,
+            "no_of_samples": 26
+        },
+        "low_freq_words": {
+            "accuracy": 0.3333333333333333,
+            "no_of_samples": 21
+        },
+        "undefined_freq_words": {
+            "accuracy": 0.6101694915254238,
+            "no_of_samples": 59
+        }
+    },
+    "val_output_shakespeare_en_sub_no-e2e_0.0001_0_8.csv": {
+        "high_freq_words": {
+            "accuracy": 0.6877828054298643,
+            "no_of_samples": 663
+        },
+        "mid_freq_words": {
+            "accuracy": 0.38738738738738737,
+            "no_of_samples": 111
+        },
+        "low_freq_words": {
+            "accuracy": 0.08333333333333333,
+            "no_of_samples": 96
+        },
+        "undefined_freq_words": {
+            "accuracy": 0.7311178247734139,
+            "no_of_samples": 331
+        }
+    },
+    "val_output_shakespeare_en_word_no-e2e_0.0001_0_8.csv": {
+        "high_freq_words": {
+            "accuracy": 0.8525641025641025,
+            "no_of_samples": 156
+        },
+        "mid_freq_words": {
+            "accuracy": 0.4090909090909091,
+            "no_of_samples": 22
+        },
+        "low_freq_words": {
+            "accuracy": 0.03333333333333333,
+            "no_of_samples": 30
+        },
+        "undefined_freq_words": {
+            "accuracy": 0.8333333333333334,
+            "no_of_samples": 54
+        }
+    },
+    "val_output_custom_en_byte_no-e2e_0.0001_0_8.csv": {
+        "high_freq_words": {
+            "accuracy": 0.13523065476190477,
+            "no_of_samples": 5376
+        },
+        "mid_freq_words": {
+            "accuracy": 0.004366812227074236,
+            "no_of_samples": 687
+        },
+        "low_freq_words": {
+            "accuracy": 0.0,
+            "no_of_samples": 630
+        },
+        "undefined_freq_words": {
+            "accuracy": 0.2587800369685767,
+            "no_of_samples": 1082
+        }
+    },
+    "val_output_custom_en_char_no-e2e_0.0001_0_8.csv": {
+        "high_freq_words": {
+            "accuracy": 0.13828401265587195,
+            "no_of_samples": 5373
+        },
+        "mid_freq_words": {
+            "accuracy": 0.0029411764705882353,
+            "no_of_samples": 680
+        },
+        "low_freq_words": {
+            "accuracy": 0.0,
+            "no_of_samples": 625
+        },
+        "undefined_freq_words": {
+            "accuracy": 0.2561531449407475,
+            "no_of_samples": 1097
+        }
+    },
+    "val_output_custom_fr_char_no-e2e_0.0001_0_8.csv": {
+        "high_freq_words": {
+            "accuracy": 0.14037455711152352,
+            "no_of_samples": 5927
+        },
+        "mid_freq_words": {
+            "accuracy": 0.0028129395218002813,
+            "no_of_samples": 711
+        },
+        "low_freq_words": {
+            "accuracy": 0.0015479876160990713,
+            "no_of_samples": 646
+        },
+        "undefined_freq_words": {
+            "accuracy": 0.5302218821729151,
+            "no_of_samples": 1307
+        }
+    }
+}

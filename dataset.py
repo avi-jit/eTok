@@ -243,7 +243,7 @@ class myDataset(Dataset):
         for remove in ['\n','<unk>','=', '@-@']:
             text = text.replace(remove,' ')
         text = re.sub(r"(-|{|}:|,|;|\.|\n|!|'|--|\?)",r' \1 ',text)
-        text = re.sub(r'\b(?:[^\s]*[a-zA-Z])+[^\s]*\b', '', text)
+        # text = re.sub(r'\b(?:[^\s]*[a-zA-Z])+[^\s]*\b', '', text)
         self.data = re.sub(r' +',r' ',text).strip()
         chars = list(set(text))
         chars.remove(' '); chars = [' '] + chars # index is 0
@@ -266,13 +266,13 @@ class myDataset(Dataset):
         if vocab_size == 0:
             if base == 'char':
                 vocab_size = len(chars)
-                self.maxlen = max(len(_) for _ in words) # max number of chars in a word
+                self.maxlen = max([len(i) for i in words]) # max number of chars in a word
             elif base == 'word':
                 vocab_size = len(words)
                 self.maxlen = 10
             elif base in ['sub','byte']:
                 vocab_size = len(self.vocab)
-                self.maxlen = max(len(self.vocab.tokenize(_)) for _ in words) # max number of subwords in a word
+                self.maxlen = max([len(self.vocab.tokenize(i)) for i in words]) # max number of subwords in a word
         else:
             raise NotImplemented # TODO: allow curbing vocab size with UNK
         if vocab:
@@ -285,8 +285,6 @@ class myDataset(Dataset):
         self.block_size = block_size
         self.do_e2e = do_e2e
         self.base = base
-        
-            
 
     def __len__(self):
         return math.ceil(len(self.data) / (self.block_size + 1))
