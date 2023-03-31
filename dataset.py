@@ -296,18 +296,27 @@ class myDataset(Dataset):
         self.base = base
         
             
-
+    def __idx_mask__(self, idxs):
+            cls_heads = torch.where(idxs == self.vocab(self.cls_token)['input_ids'][0])[0]            
+            cls_heads_shifted = torch.roll(cls_heads, shifts=-1, dims=0)
+            cls_heads_shifted[-1] = idxs.size()[-1]
+            mask = cls_heads_shifted - cls_heads
+            return torch.tensor(mask, dtype=torch.long)
+            
     def __len__(self):
         return math.ceil(len(self.data) / (self.block_size + 1))
 
     def __getitem__(self, idx, chunk=None, recursion=0):
         k = 1
+        word_shifter = 0
         if self.base == 'sub' and not self.do_e2e:
             k = 5
         if not chunk: # can give space-sep (for e2e) or raw text too.
-            i = np.random.randint(0, len(self.data) - (self.block_size + 1)) 
+            word_shifter = 30
+            # (!) word_shifter only considered subword
+            i = np.random.randint(0, len(self.data) - (k*self.block_size + 1 + word_shifter)) 
             # we're actually going to "cheat" and pick a spot in the dataset at random
-            chunk = self.data[i:i+k*self.block_size+2] # block_size ~ word size (!) +1 need to stay!!!!
+            chunk = self.data[i:i+k*self.block_size+2+word_shifter] # block_size ~ word size (!) +1 need to stay!!!!
             
         if self.do_e2e: # chunk has block_size words
             if self.base in ['sub','byte']: # TODO: 0 may not be padding here?
@@ -317,27 +326,17 @@ class myDataset(Dataset):
             #mask = torch.tensor([len(_)-1 for _ in x], dtype=torch.long)
 
             idxs = torch.tensor(idxs)
-            idxs[0] = self.vocab(self.cls_token)['input_ids'][0]
+            #idxs[0] = self.vocab(self.cls_token)['input_ids'][0]
             cls_heads = torch.where(idxs == self.vocab(self.cls_token)['input_ids'][0])[0]            
-            cls_heads_shifted = torch.roll(cls_heads, shifts=-1, dims=0)
-            cls_heads_shifted[-1] = idxs.size()[-1]
-            mask = cls_heads_shifted - cls_heads
-            print('mask is: ')
-            print(torch.cumsum(mask, -1))
-            print(idxs.shape)
             x = torch.tensor(idxs)
-            x = x[:-1]
-            #x = torch.nn.functional.pad(x, (0, self.block_size - (x_mask.shape)[-1]), mode='constant', value=0)
-            x_mask = torch.tensor(mask, dtype=torch.long)
-            x_mask[-1]-=1
-            x_mask = torch.nn.functional.pad(x_mask, (0, 1 + self.block_size - (x_mask.shape)[-1]), mode='constant', value=0)
+            x = x[cls_heads[0]:]
+            x = x[:self.block_size]
+            x_mask = self.__idx_mask__(x)
+            
             y = torch.tensor(idxs)
-            y = y[1:]
-            #y = torch.nn.functional.pad(y, (0, self.block_size - (y_mask.shape)[-1]), mode='constant', value=0)
-            y_mask = torch.tensor(mask, dtype=torch.long)
-            y_mask[0]-=1
-            y_mask = torch.nn.functional.pad(y_mask, (0, 1 + self.block_size - (y_mask.shape)[-1]), mode='constant', value=0)
-            print(x.shape, y.shape, x_mask.shape, y_mask.shape, self.block_size)
+            y = y[cls_heads[1]:]
+            y = y[:self.block_size - (cls_heads[1]-cls_heads[0])]
+            y_mask = self.__idx_mask__(y)
             return x, y, x_mask, y_mask
             # (!) x, y are padded too !!!!
         else: # chunk has block_size chars/bytes/subwords
