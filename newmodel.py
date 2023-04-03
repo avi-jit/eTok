@@ -15,25 +15,22 @@ logger = logging.getLogger(__name__)
 
 
 class SelfAttentionBlock(nn.Module):
-    def __init__(self, input_dim, num_heads):
+    def __init__(self, config):
         super().__init__()
-        self.multihead_attention = nn.MultiheadAttention(input_dim, num_heads, batch_first = True)
-        self.layer_norm = nn.LayerNorm(input_dim)
+        self.ln1 = nn.LayerNorm(config.n_embd)
+        self.ln2 = nn.LayerNorm(config.n_embd)
+        self.attn = nn.MultiheadAttention(config.n_embd, config.n_e2e_head, batch_first = True)
+        self.mlp = nn.Sequential(
+            nn.Linear(config.n_embd, 4 * config.n_embd),
+            nn.GELU(),
+            nn.Linear(4 * config.n_embd, config.n_embd),
+            nn.Dropout(config.resid_pdrop),
+        )
     
     def forward(self, x, mask=None):
-        attn_output, _ = self.multihead_attention(x, x, x, attn_mask=mask)
-        output = self.layer_norm(x + attn_output)
-        return output 
-
-class SelfAttentionBlockSequence(nn.Module):
-    def __init__(self, input_dim, num_heads, num_layers):
-        super().__init()
-        self.blocks = nn.ModuleList([
-            SelfAttentionBlock(input_dim, num_heads) for _ in range(num_layers)])
-    
-    def forward(self, x, mask=None):
-        for block in self.blocks:
-            x = block(x, mask=mask)
+        x = self.ln1(x)
+        x = x + self.attn(x, x, x, attn_mask = mask)[0]
+        x = x + self.mlp(self.ln2(x))
         return x
 
 class myGPT(pl.LightningModule):
