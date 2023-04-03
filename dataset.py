@@ -310,9 +310,10 @@ class myDataset(Dataset):
         if self.base == 'sub' and not self.do_e2e:
             k = 5
         if not chunk: # can give space-sep (for e2e) or raw text too.
-            i = np.random.randint(0, len(self.data) - (self.block_size + 1)) 
+            word_shifter = 30
+            i = np.random.randint(0, len(self.data) - (self.block_size + 1 + word_shifter)) 
             # we're actually going to "cheat" and pick a spot in the dataset at random
-            chunk = self.data[i:i+k*self.block_size+2] # block_size ~ word size (!) +1 need to stay!!!!
+            chunk = self.data[i:i+k*self.block_size+2+word_shifter] # block_size ~ word size (!) +1 need to stay!!!!
             
         if self.do_e2e: # chunk has block_size words
             if self.base in ['sub','byte']: # TODO: 0 may not be padding here?
