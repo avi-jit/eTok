@@ -337,12 +337,12 @@ class myDataset(Dataset):
             y = y[cls_heads[1]:]
             y = y[1:]
             y = y[:self.block_size - (cls_heads[1]-cls_heads[0])]
-            y_mask = None
+            y_mask = torch.tensor(x_mask)
             
             
-            y = torch.nn.functional.pad(y, (0, self.block_size - (y.shape)[-1]), mode='constant', value=0)
+            y = torch.nn.functional.pad(y, (self.block_size - (y.shape)[-1], 0), mode='constant', value=0)
             x_mask = torch.nn.functional.pad(x_mask, (0, self.block_size - (x_mask.shape)[-1]), mode='constant', value=0)
-            #y_mask = torch.nn.functional.pad(y_mask, (0, self.block_size - (y_mask.shape)[-1]), mode='constant', value=0)
+            y_mask = torch.nn.functional.pad(y_mask, (0, self.block_size - (y_mask.shape)[-1]), mode='constant', value=0)
             
             return x, y, x_mask, y_mask
         else: # chunk has block_size chars/bytes/subwords
