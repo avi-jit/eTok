@@ -216,13 +216,11 @@ class myGPT(pl.LightningModule):
             token_embeddings = self.drop(token_embeddings + in_pe) # [B, t, embd]
             cls_indx = self._get_cls_indx(mask) 
             e2e_masks = self._make_mask(mask) #[B, t, t] (?) don't know how to do in batch
-            e2e_masks = torch.repeat_interleave(e2e_masks, self.config.n_e2e_head, dim=0)
-            out = self.wordenc(token_embeddings, mask = e2e_masks)
-            #out = self.wordenc(token_embeddings, e2e_masks.bool()) #[B, t, embd]
+            out = self.wordenc(token_embeddings, mask = torch.repeat_interleave(e2e_masks, self.config.n_e2e_head, dim=0))
             query = self._extract_cls(out, cls_indx) # query = [B, cls_max, embd]
             
             _, tq, _ = query.size() #[B, cls_max, embd]
-            word_pe = self.word_pe[:, tq, :]
+            word_pe = self.word_pe[:, :tq, :]
             in_embd = self.drop(query + word_pe)
 
         else:
