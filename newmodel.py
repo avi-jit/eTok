@@ -39,7 +39,7 @@ class SelfAttentionDecoder(nn.Module):
         self.blocks = nn.ModuleList([
             SelfAttentionBlock(config) for _ in range(config.n_e2e_layer)])
 
-    def forward(self, x, mask=None):
+    def forward(self, x, masks=None):
         for block in self.blocks:
             x = block(x, mask=mask)
         return x
@@ -234,7 +234,7 @@ class myGPT(pl.LightningModule):
             B, t_canvas, _ = canvas.shape
             canvas_pe = self.in_pe[:, :t_canvas, :] 
             tokens_out = self.drop(canvas+canvas_pe) #[B, t, embd]
-            out = self.decoder_blocks(tokens_out, mask=torch.repeat_interleave(e2e_masks, self.config.n_e2e_head, dim=0))
+            out = self.decoder_blocks(tokens_out, masks=torch.repeat_interleave(e2e_masks, self.config.n_e2e_head, dim=0))
 
             logits = self.head(out)
         else:
