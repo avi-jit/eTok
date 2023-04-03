@@ -85,7 +85,7 @@ class myGPT(pl.LightningModule):
             canvas_size = block_size
         
         # input embedding stem
-        self.in_emb = nn.Embedding(len(vocab) + num_prefix, n_embd)
+        self.in_emb = nn.Embedding(vocab_length, n_embd)
         self.in_pe = nn.Parameter(torch.zeros(1, block_size, n_embd))
         self.drop = nn.Dropout(embd_pdrop)
 
