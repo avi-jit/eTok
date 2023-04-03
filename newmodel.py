@@ -93,7 +93,7 @@ class myGPT(pl.LightningModule):
         # decoder head
         self.ln_f = nn.LayerNorm(n_embd)
         if num_prefix > 0:
-            self.decoder_blocks = SelfAttentionBlockSequence(input_dim=n_embd, num_heads=n_e2e_head, num_layers=n_e2e_layer)
+            self.decoder_blocks = SelfAttentionDecoder(self.config)
             self.head = nn.Linear(n_embd, len(vocab), bias=False)
         else:
             self.head = nn.Linear(n_embd, len(vocab), bias=False)
