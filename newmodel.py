@@ -24,7 +24,7 @@ class SelfAttentionBlock(nn.Module):
             nn.Linear(config.n_embd, 4 * config.n_embd),
             nn.GELU(),
             nn.Linear(4 * config.n_embd, config.n_embd),
-            nn.Dropout(config.resid)pdrop),
+            nn.Dropout(config.resid_pdrop),
         )
     
     def forward(self, x, mask=None):
