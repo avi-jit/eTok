@@ -19,7 +19,7 @@ class SelfAttentionBlock(nn.Module):
         super().__init__()
         self.ln1 = nn.LayerNorm(config.n_embd)
         self.ln2 = nn.LayerNorm(config.n_embd)
-        self.attn = nn.MultiheadAttention(input_dim, num_heads, batch_first = True)
+        self.attn = nn.MultiheadAttention(config.n_embd, config.n_e2e_head, batch_first = True)
         self.mlp = nn.Sequential(
             nn.Linear(config.n_embd, 4 * config.n_embd),
             nn.GELU(),
