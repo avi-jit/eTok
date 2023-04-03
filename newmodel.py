@@ -29,10 +29,20 @@ class SelfAttentionBlock(nn.Module):
     
     def forward(self, x, mask=None):
         x = self.ln1(x)
-        x = x + self.attn(x, x, x, attn_mask = mask)
+        x = x + self.attn(x, x, x, attn_mask = mask)[0]
         x = x + self.mlp(self.ln2(x))
         return x
 
+class SelfAttentionDecoder(nn.Module):
+def __init__(self, config):
+    super().__init__()
+    self.blocks = nn.ModuleList([
+        SelfAttentionBlock(config) for _ in range(config.n_e2e_layer)])
+
+def forward(self, x, mask=None):
+    for block in self.blocks:
+        x = block(x, mask=mask)
+    return x
 
 class myGPT(pl.LightningModule):
     """  end-to-end tokenized full GPT language model, with a context size of block_size """
@@ -94,7 +104,7 @@ class myGPT(pl.LightningModule):
         # decoder head
         self.ln_f = nn.LayerNorm(n_embd)
         if num_prefix > 0:
-            self.decoder_blocks = nn.Sequential(*[SelfAttentionBlock(self.config) for _ in range(n_e2e_layer)])
+            self.decoder_blocks = SelfAttentionDecoder(self.config)
             self.head = nn.Linear(n_embd, len(vocab), bias=False)
         else:
             self.head = nn.Linear(n_embd, len(vocab), bias=False)
