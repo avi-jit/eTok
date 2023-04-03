@@ -82,7 +82,7 @@ class myGPT(pl.LightningModule):
             canvas_size = block_size
         
         # input embedding stem
-        self.in_emb = nn.Embedding(len(vocab) + num_prefix, n_embd)
+        self.in_emb = nn.Embedding(len(vocab), n_embd)
         self.in_pe = nn.Parameter(torch.zeros(1, block_size, n_embd))
         self.drop = nn.Dropout(embd_pdrop)
 
@@ -198,13 +198,12 @@ class myGPT(pl.LightningModule):
             token_embeddings = self.drop(token_embeddings + in_pe) # [B, t, embd]
             cls_indx = self._get_cls_indx(mask) 
             e2e_masks = self._make_mask(mask) #[B, t, t] (?) don't know how to do in batch
-            e2e_masks = torch.repeat_interleave(e2e_masks, self.config.n_e2e_head, dim=0)
-            out = self.wordenc(token_embeddings, mask = e2e_masks)
+            out = self.wordenc(token_embeddings, mask = torch.repeat_interleave(e2e_masks, self.config.n_e2e_head, dim=0))
             #out = self.wordenc(token_embeddings, e2e_masks.bool()) #[B, t, embd]
             query = self._extract_cls(out, cls_indx) # query = [B, cls_max, embd]
             
             _, tq, _ = query.size() #[B, cls_max, embd]
-            word_pe = self.word_pe[:, tq, :]
+            word_pe = self.word_pe[:, :tq, :]
             in_embd = self.drop(query + word_pe)
 
         else:
@@ -224,7 +223,7 @@ class myGPT(pl.LightningModule):
             B, t_canvas, _ = canvas.shape
             canvas_pe = self.in_pe[:, :t_canvas, :] 
             tokens_out = self.drop(canvas+canvas_pe) #[B, t, embd]
-            out = self.decoder_blocks(tokens_out, mask=e2e_masks)
+            out = self.decoder_blocks(tokens_out, mask=torch.repeat_interleave(e2e_masks, self.config.n_e2e_head, dim=0))
 
             logits = self.head(out)
         else:
