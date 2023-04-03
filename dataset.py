@@ -331,7 +331,7 @@ class myDataset(Dataset):
             x_mask = self.__idx_mask__(x)
             
             y = torch.tensor(idxs)
-            y = y[cls_head[0]:]
+            y = y[cls_heads[0]:]
             y = y[1:self.block_size+1]
             y_mask = torch.tensor(x_mask) # meaningless
             
