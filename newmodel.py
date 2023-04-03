@@ -34,15 +34,15 @@ class SelfAttentionBlock(nn.Module):
         return x
 
 class SelfAttentionDecoder(nn.Module):
-def __init__(self, config):
-    super().__init__()
-    self.blocks = nn.ModuleList([
-        SelfAttentionBlock(config) for _ in range(config.n_e2e_layer)])
+    def __init__(self, config):
+        super().__init__()
+        self.blocks = nn.ModuleList([
+            SelfAttentionBlock(config) for _ in range(config.n_e2e_layer)])
 
-def forward(self, x, mask=None):
-    for block in self.blocks:
-        x = block(x, mask=mask)
-    return x
+    def forward(self, x, mask=None):
+        for block in self.blocks:
+            x = block(x, mask=mask)
+        return x
 
 class myGPT(pl.LightningModule):
     """  end-to-end tokenized full GPT language model, with a context size of block_size """
