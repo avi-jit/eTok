@@ -175,15 +175,6 @@ class myGPT(pl.LightningModule):
             cls_out.append(torch.tensor(out[i][cls_indx_seq_truncated]))
         cls_out = torch.nn.utils.rnn.pad_sequence(cls_out, batch_first = True)
         return cls_out
-
-    
-    def _shift_first_zero(self, cls_indx, out):
-        B, t, _ =  out.size()
-        out_new = torch.zeros((B, t, _), device=out.device)
-        for i in range(B):
-            out_new[i] = torch.roll(out[i], shifts=-cls_indx[i][1].item(), dims=0)
-        return out_new
-            
         
     def _get_canvas(self, out, net, cls_indx, mask):
         B, t, _ = out.size()
@@ -245,7 +236,6 @@ class myGPT(pl.LightningModule):
             tokens_out = self.drop(canvas+canvas_pe) #[B, t, embd]
             
             out = self.decoder_blocks(tokens_out, mask=e2e_masks)
-            out = self._shift_first_zero(cls_indx, out)
             logits = self.head(out)
         else:
             logits = self.head(net.reshape(b, t, -1))
