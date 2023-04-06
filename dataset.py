@@ -1,3 +1,4 @@
+
 from torch.utils.data import Dataset, DataLoader
 import torch
 import regex as re
@@ -247,8 +248,9 @@ class myDataset(Dataset):
         for remove in ['\n','<unk>','=', '@-@']:
             text = text.replace(remove,' ')
         text = re.sub(r"(-|{|}:|,|;|\.|\n|!|'|--|:|\?)",r' ',text) #(?) why originally different
-        text = re.sub(r' +',r' ',text)
         text = re.sub('\s{2,}', ' ', text)
+        text = re.sub(r' +',r' ',text)
+        print('num of words without cls tokens', len(text.split(' ')))
         text = re.sub(r' ', r' ' + cls_token + r' ', text) #(!)
         self.data = text
         chars = list(set(text))
@@ -282,8 +284,10 @@ class myDataset(Dataset):
         if base == 'word':
             self.data = self.data.split(' ')
         if do_e2e and base == 'sub':
+            print("data len:", len(self.data))
+            print("data len (split):", len(self.data.split(' ')))
             self.data = list(chain(*[self.vocab(word, truncation=True, max_length=self.maxlen, add_special_tokens=False)['input_ids'] for word in self.data.split(' ')])) #(!) pre tokenization
-            
+            print("data len(after):",len(self.data)) 
         if vocab:
             self.vocab = vocab
             if base in ['char','word']:
@@ -300,7 +304,7 @@ class myDataset(Dataset):
         cls_heads_shifted = torch.roll(cls_heads, shifts=-1, dims=0)
         cls_heads_shifted[-1] = idxs.size()[-1]
         mask = cls_heads_shifted - cls_heads
-        return torch.tensor(mask, dtype=torch.long)        
+        return torch.tensor(mask, dtype=torch.long)    
 
     def __len__(self):
         return math.ceil(len(self.data) / (self.block_size + 1))
@@ -313,7 +317,7 @@ class myDataset(Dataset):
             word_shifter = 30
             i = np.random.randint(0, len(self.data) - (self.block_size + 1 + word_shifter)) 
             # we're actually going to "cheat" and pick a spot in the dataset at random
-            chunk = self.data[i:i+k*self.block_size+2+word_shifter] # block_size ~ word size (!) +1 need to stay!!!!
+            chunk = self.data[i:round(i+k*self.block_size+2+word_shifter)] # block_size ~ word size
             
         if self.do_e2e: # chunk has block_size words
             if self.base in ['sub','byte']: # TODO: 0 may not be padding here?
@@ -321,8 +325,6 @@ class myDataset(Dataset):
             else:    
                 idxs = [[self.vocab[_] for _ in word] for word in chunk]
             #mask = torch.tensor([len(_)-1 for _ in x], dtype=torch.long)
-
-            
             idxs = torch.tensor(idxs)
             cls_heads = torch.where(idxs == self.vocab(self.cls_token)['input_ids'][0])[0]            
             x = torch.tensor(idxs)
@@ -332,14 +334,15 @@ class myDataset(Dataset):
             
             y = torch.tensor(idxs)
             y = y[cls_heads[0]:]
-            y = y[1:self.block_size+1]
+            y = y[1:]
+            y = y[:self.block_size]
             y_mask = torch.tensor(x_mask) # meaningless
             
             x_mask = torch.nn.functional.pad(x_mask, (0, self.block_size - (x_mask.shape)[-1]), mode='constant', value=0)
             y_mask = torch.nn.functional.pad(y_mask, (0, self.block_size - (y_mask.shape)[-1]), mode='constant', value=0)
           
+            #print(torch.cumsum(x_mask, dim=-1))
             return x, y, x_mask, y_mask
-            # (!) x, y are padded too !!!!
         else: # chunk has block_size chars/bytes/subwords
             if self.base == 'word':
                 idxs = [self.vocab[_] for _ in chunk]
@@ -354,3 +357,4 @@ class myDataset(Dataset):
             x = torch.tensor(idxs[:-1], dtype=torch.long)
             y = torch.tensor(idxs[1:], dtype=torch.long)
             return x, y
+
