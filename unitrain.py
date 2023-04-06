@@ -32,15 +32,15 @@ import random
 import argparse
 
 def main(
-        DATASET='shakespeare', 
+        DATASET='trial', 
         DEVICE=0, 
-        NUM_PREFIX=1, 
+        NUM_PREFIX=4, 
         #block_size=128, 
         block_size=256,
         batch_size=8, 
-        base='sub', 
+        base='word', 
         do_e2e=False,
-        EPOCHS=1,
+        EPOCHS=400,
         LOAD_CKPT=None,
         debug=False,
     ):
@@ -59,9 +59,9 @@ def main(
         vocab = model.config.vocab
         #maxlen = model.config.maxlen
         
-    CACHE_DIR="/nas/ckgfs/users/thawani/hf_cache/datasets" # default ~/.cache/huggingface/datasets
+    CACHE_DIR="/home1/xzhu9839/data" # default ~/.cache/huggingface/datasets
     if DATASET == 'shakespeare': # one line of poem is roughly 50 characters
-        text = open(r'C:\Users\lenovo\OneDrive\Desktop\Project\eToK\eTok-Compressed_Dim_Version\tinyshake.txt', 'r').read() # don't worry we won't run out of file handles
+        text = open('/home1/xzhu9839/data/tinyshake.txt', 'r').read() # don't worry we won't run out of file handles
     elif DATASET == 'wiki':
         text = ' '.join(datasets.load_dataset("wikitext", "wikitext-2-v1", split="train", cache_dir=CACHE_DIR)['text'])
     elif DATASET == 'mc4':
@@ -102,7 +102,7 @@ def main(
         full_dataset = myDataset(text, block_size=block_size, base=base, do_e2e=do_e2e, vocab=vocab,)
     else:
         full_dataset = myDataset(text, block_size=block_size, base=base, do_e2e=do_e2e)
-
+    print('dataset initialized')
     # use 20% of training data for validation
     train_set_size = int(len(full_dataset) * 0.8)
     valid_set_size = len(full_dataset) - train_set_size
@@ -110,7 +110,8 @@ def main(
     # split the train set into two
     #seed = torch.Generator().manual_seed(42)
     train_set, val_set = torch.utils.data.random_split(full_dataset, [train_set_size, valid_set_size])
-
+    print('train set: ', train_set_size)
+    print('val set: ', valid_set_size)
     #train_loader = DataLoader(train_dataset, batch_size=20, num_workers=16)
     train_loader = DataLoader(train_set, batch_size=batch_size, num_workers=16)
     val_loader = DataLoader(val_set, batch_size=batch_size, num_workers=16)
@@ -121,7 +122,7 @@ def main(
         log_model_checkpoints=False,
         #name=f"{DATASET} {'-'.join(langs)} {model_type}{model.config.num_prefix} {base} {output_type} {batch_size}bs {block_size}bl"
     )'''   
-    logger = pl.loggers.WandbLogger(project="etok", save_dir='/nas/ckgfs/users/thawani/etok/')
+    logger = pl.loggers.WandbLogger(project="etok", save_dir='/home1/xzhu9839/data/etok/')
     #wandb.run.name = f"{DATASET} {'-'.join(langs)} {model_type}{model.config.num_prefix} {base} {output_type} {batch_size}bs {block_size}bl {'-'.join(wandb.run.name.split('-')[:2])}"
     wandb.run.name = f"{'debug_' if debug else ''}{NUM_PREFIX if do_e2e else ''}_{base}_{DATASET}_{logger.experiment.name}_{EPOCHS}ep"
     #logger.log_hyperparams(params=model.config)
@@ -151,16 +152,16 @@ def main(
             num_prefix=NUM_PREFIX,
             canvas_size=full_dataset.maxlen,
         )
+        print('model initialized')
 
         # scheduler
         lr_decay = LearningRateDecayCallback(learning_rate=1e-4, warmup_tokens=512*20,
                                             final_tokens=00*len(train_set)*block_size)
         
         trainer = Trainer(
-                        accelerator="gpu",
+			accelerator="gpu",
                         profiler="simple",
-                        # accelerator="gpu", 
-                        #devices=[DEVICE], 
+                        devices=[DEVICE], 
                         precision=16, 
                         max_epochs=EPOCHS,
                         gradient_clip_val=1.0, 
@@ -169,72 +170,54 @@ def main(
                         #row_log_interval=1,
                         #log_every_n_steps=15,
                         logger=logger,
-                        val_check_interval=0.25,
-                        default_root_dir="/nas/ckgfs/users/thawani/etok/checkpoints/",
+                        check_val_every_n_epoch=3,
+                        #val_check_interval=1,
+                        default_root_dir="/home1/xzhu9839/data/checkpoints/",
                         )
+        print('trainer initialized')
         #trainer.fit(model, train_loader)
         #model.hparams.itoc = None
         #trainer.model.hparams.values()
+        print('training start')
         trainer.fit(model, train_loader, val_loader)
-    else:   
-        model.eval()
-        logger.experiment.set_name(f"eval_{logger.experiment.name}")
-        with torch.no_grad():
-            trainer = Trainer(#accelerator="cpu",
+    else:
+        lr_decay = LearningRateDecayCallback(learning_rate=1e-4, warmup_tokens=512*20,
+                                            final_tokens=00*len(train_set)*block_size)   
+        #logger.experiment.set_name(f"eval_{logger.experiment.name}")
+        trainer = Trainer(
+			    accelerator="gpu",
                             profiler="simple",
-                            accelerator="gpu", devices=[DEVICE], 
-                            #precision=16, 
-                            max_epochs=1,
+                            devices=[DEVICE], 
+                            precision=16, 
+                            max_epochs=EPOCHS,
                             gradient_clip_val=1.0, 
+                            callbacks=[lr_decay],
                             logger=logger,
-                            val_check_interval=0.25,
-                            default_root_dir="/nas/ckgfs/users/thawani/etok/checkpoints/",
-                            )
-            trainer.validate(model=model, dataloaders=[val_loader])
-               
-#main(DATASET='shakespeare', DEVICE=1, NUM_PREFIX=4, base='byte', do_e2e=True, EPOCHS=1, debug=True)
-
-# for base in ['byte','char','sub','word']:
-#     for e2e in [True, False]:
-#         for dataset in ['indic-hi']:
-#             if base == 'word' and e2e:
-#                 continue
-#             print(f"{'-'*20} {dataset=} {base=} {e2e=} {'-'*20}")
-#             main(DATASET=dataset, DEVICE=1, NUM_PREFIX=4, base=base, do_e2e=e2e, EPOCHS=1, debug=True, block_size=128+64, batch_size=2, )
-
-#main(LOAD_CKPT="/nas/ckgfs/users/thawani/etok/checkpoints/etok/21e283a7b7f343eab22de2854a6a0fa8/checkpoints/epoch=49-step=9800.ckpt", DEVICE=2, DATASET="shakespeare") # 4sub
-#main(LOAD_CKPT="/nas/ckgfs/users/thawani/etok/checkpoints/etok/bbab251fa3474fe187f17fca80aeb10d/checkpoints/epoch=49-step=9800.ckpt", DEVICE=2, DATASET="shakespeare") # 4char
-#main(LOAD_CKPT="/nas/ckgfs/users/thawani/etok/checkpoints/etok/2dda188ade9d43a09ec4a8a3d08a0a0f/checkpoints/epoch=49-step=9800.ckpt", DEVICE=2, DATASET="shakespeare") # 4byte
-
-#main(LOAD_CKPT="/nas/ckgfs/users/thawani/etok/checkpoints/etok/c82ecff627ba48b99fe338c5c54675b0/checkpoints/epoch=49-step=9800.ckpt", DEVICE=2, DATASET="shakespeare") # word - eval exists
-
-# _sub, _char, _byte: word 0
-#main(LOAD_CKPT="/nas/ckgfs/users/thawani/etok/checkpoints/etok/23fb899d588d450e8bc8a7fc4e83496a/checkpoints/epoch=49-step=44898.ckpt", DEVICE=3, DATASET="shakespeare") # _sub
-#main(LOAD_CKPT="/nas/ckgfs/users/thawani/etok/checkpoints/etok/deed7582996b4c11814314c71a363498/checkpoints/epoch=49-step=44898.ckpt", DEVICE=3, DATASET="shakespeare") # _char
-#main(LOAD_CKPT="/nas/ckgfs/users/thawani/etok/checkpoints/etok/18970dc331f24b999edbd5d17a33f555/checkpoints/epoch=49-step=44898.ckpt", DEVICE=3, DATASET="shakespeare") # _byte
-
-# old
-#main(LOAD_CKPT="/nas/ckgfs/users/thawani/etok/checkpoints/etok/8c25cc8dcdc04bf49aad54a77f8046f4/checkpoints/epoch=49-step=9800.ckpt", DEVICE=3, DATASET="shakespeare") # sub
-#main(LOAD_CKPT="/nas/ckgfs/users/thawani/etok/checkpoints/etok/cbf7310be4a24176b4d8cd28879171f4/checkpoints/epoch=49-step=9800.ckpt", DEVICE=2, DATASET="shakespeare") # 4byte
-
+                            check_val_every_n_epoch=3,
+                            #val_check_interval=1,
+                            default_root_dir="/home1/xzhu9839/data/checkpoints/",
+                            )               
+        print('training start')
+        trainer.fit(model, train_loader, val_loader)
 
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-base", type=str, default='sub') # byte, char, sub, word
-    parser.add_argument("--ckpt", type=str, default='') # 
+    parser.add_argument("--ckpt", default=False) # 
     parser.add_argument("-dataset", type=str, default='shakespeare') # shakespeare, mc4, trial
     parser.add_argument("--num_prefix", type=int, default=1)
-    parser.add_argument("--num_epochs", type=int, default=50)
+    parser.add_argument("--num_epochs", type=int, default=400)
     parser.add_argument("--device", type=int, default=0)
     parser.add_argument("--block_size", type=int, default=128+64)
     parser.add_argument("--batch_size", type=int, default=2)
-    #parser.add_argument("-e2e", type=bool)
+    #parser.add_argument("-e2e", type=bool, default=True)
     parser.add_argument('--e2e', default=True, action=argparse.BooleanOptionalAction)
     args = parser.parse_args()
-    if args.ckpt == '':
+    if args.ckpt == False:
         main(DATASET=args.dataset, DEVICE=args.device, NUM_PREFIX=args.num_prefix, base=args.base, do_e2e=args.e2e, EPOCHS=args.num_epochs, 
              block_size=args.block_size, batch_size=args.batch_size, debug=False)
     else:
-        main(LOAD_CKPT=f"/nas/ckgfs/users/thawani/etok/checkpoints/etok/{args.ckpt}/checkpoints/epoch=49-step=9800.ckpt", DEVICE=2, DATASET="shakespeare") # word
+        main(LOAD_CKPT=f"/home1/xzhu9839/data/etok/etok/efgqdoez/checkpoints/epoch=398-step=407379.ckpt", DEVICE=args.device,  NUM_PREFIX=args.num_prefix, base=args.base, do_e2e=args.e2e, EPOCHS=args.num_epochs,
+             block_size=args.block_size, batch_size=args.batch_size, debug=False, DATASET="shakespeare") # word
 # nohup python unitrain.py -dataset shakespeare -base sub --no-e2e --device 2 &
