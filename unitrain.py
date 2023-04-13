@@ -160,7 +160,7 @@ def main(
                         accelerator="gpu",
                         profiler="simple",
                         # accelerator="gpu", 
-                        #devices=[DEVICE], 
+                        devices=[DEVICE], 
                         precision=16, 
                         max_epochs=EPOCHS,
                         gradient_clip_val=1.0, 
@@ -169,7 +169,8 @@ def main(
                         #row_log_interval=1,
                         #log_every_n_steps=15,
                         logger=logger,
-                        val_check_interval=0.25,
+                        check_val_every_n_epoch=3,
+                        #val_check_interval=1,
                         default_root_dir="/home1/xzhu9839/data/checkpoints/",
                         )
         #trainer.fit(model, train_loader)
@@ -177,21 +178,24 @@ def main(
         #trainer.model.hparams.values()
         trainer.fit(model, train_loader, val_loader)
     else:   
-        model.eval()
-        logger.experiment.set_name(f"eval_{logger.experiment.name}")
-        with torch.no_grad():
-            trainer = Trainer(#accelerator="cpu",
+        lr_decay = LearningRateDecayCallback(learning_rate=1e-4, warmup_tokens=512*20,
+                                            final_tokens=00*len(train_set)*block_size)
+        #logger.experiment.set_name(f"eval_{logger.experiment.name}")
+        trainer = Trainer(
+                            accelerator="gpu",
                             profiler="simple",
-                            accelerator="gpu", devices=[DEVICE], 
-                            #precision=16, 
-                            max_epochs=1,
-                            gradient_clip_val=1.0, 
+                            devices=[DEVICE],
+                            precision=16,
+                            max_epochs=EPOCHS,
+                            gradient_clip_val=1.0,
+                            callbacks=[lr_decay],
                             logger=logger,
-                            val_check_interval=0.25,
+                            check_val_every_n_epoch=3,
+                            #val_check_interval=0.25,
                             default_root_dir="/home1/xzhu9839/data/checkpoints/",
                             )
-            trainer.validate(model=model, dataloaders=[val_loader])
-               
+        print('training start')
+        trainer.fit(model, train_loader, val_loader) 
 #main(DATASET='shakespeare', DEVICE=1, NUM_PREFIX=4, base='byte', do_e2e=True, EPOCHS=1, debug=True)
 
 # for base in ['byte','char','sub','word']:
@@ -221,20 +225,21 @@ def main(
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-base", type=str, default='sub') # byte, char, sub, word
-    parser.add_argument("--ckpt", type=str, default='') # 
+    parser.add_argument("-base", type=str, default='char') # byte, char, sub, word
+    parser.add_argument("--ckpt", default=False) # 
     parser.add_argument("-dataset", type=str, default='shakespeare') # shakespeare, mc4, trial
     parser.add_argument("--num_prefix", type=int, default=1)
-    parser.add_argument("--num_epochs", type=int, default=50)
+    parser.add_argument("--num_epochs", type=int, default=200)
     parser.add_argument("--device", type=int, default=0)
     parser.add_argument("--block_size", type=int, default=128+64)
     parser.add_argument("--batch_size", type=int, default=2)
     #parser.add_argument("-e2e", type=bool)
     parser.add_argument('--e2e', default=True, action=argparse.BooleanOptionalAction)
     args = parser.parse_args()
-    if args.ckpt == '':
+    if args.ckpt == False:
         main(DATASET=args.dataset, DEVICE=args.device, NUM_PREFIX=args.num_prefix, base=args.base, do_e2e=args.e2e, EPOCHS=args.num_epochs, 
              block_size=args.block_size, batch_size=args.batch_size, debug=False)
     else:
-        main(LOAD_CKPT=f"/home1/xzhu9839/data/etok/etok/ow9k0juj/checkpoints/epoch=110-step=113075.ckpt", DEVICE=2, DATASET="shakespeare") # word
+        main(LOAD_CKPT=f"/home1/xzhu9839/data/etok/etok/h76l3r9n/checkpoints/epoch=98-step=101078.ckpt", DEVICE=args.device,  NUM_PREFIX=args.num_prefix, base=args.base, do_e2e=args.e2e, EPOCHS=args.num_epochs,
+             block_size=args.block_size, batch_size=args.batch_size, debug=False, DATASET="shakespeare")# word
 # nohup python unitrain.py -dataset shakespeare -base sub --no-e2e --device 2 &
