@@ -81,6 +81,20 @@ class myDataset(Dataset):
     def __len__(self):
         return math.ceil(len(self.data) / (self.block_size + 1))
 
+    def __get_mask__(self, idx, mask):
+        mask = mask.detach().clone()
+        mask = torch.cumsum(mask, 0)
+        mask = torch.where(mask < self.block_size, mask, 0)
+        end_idx = (mask!=0).nonzero(as_tuple=True)[0][-1]
+        last_sum = mask[end_idx]
+        add_value = self.block_size - last_sum
+        mask_shifted = torch.roll(mask, shifts=1, dims=0)
+        mask_shifted[0] = 0
+        mask_shifted[end_idx+1] = 0
+        mask = mask - mask_shifted
+        mask[end_idx+1] = add_value
+        return mask
+    
     def __getitem__(self, idx, chunk=None, recursion=0):
         k = 1
         word_shifter = 0
@@ -97,20 +111,24 @@ class myDataset(Dataset):
             else:    
                 idxs = [[self.vocab[_] for _ in word] for word in chunk]
             #mask = torch.tensor([len(_)-1 for _ in x], dtype=torch.long)
-            
-            idxs = []
+    
             mask = []
-            for word in self.data:
-                now_idx = 
-                idxs = 
+            for word in chunk:
+              now_tokens = self.vocab(word, truncation=True, add_special_tokens=False)['input_ids']
+              idxs += now_tokens
+              mask.append(len(now_tokens))
+
+            x = idx[:seq_len]
+            mask = torch.tensor(mask)
+            seq_len = self.block_size
+            x_mask = self.__get_mask__(x, mask, seq_len)
+            y = idx[1:seq_len]
+            seq_len -= mask[0]
+            mask = torch.roll(mask, shifts=-1, dims=0)
+            mask[-1] = 0
+            #(!) --- in progress ---
             
-            idxs = torch.tensor(idxs)
-            #idxs[0] = self.vocab(self.cls_token)['input_ids'][0]
-            cls_heads = torch.where(idxs == self.vocab(self.cls_token)['input_ids'][0])[0]            
-            x = torch.tensor(idxs)
-            x = x[cls_heads[0]:]
-            x = x[:self.block_size]
-            x_mask = self.__idx_mask__(x)
+
             
             
             
