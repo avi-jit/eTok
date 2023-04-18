@@ -81,13 +81,13 @@ class myDataset(Dataset):
     def __len__(self):
         return math.ceil(len(self.data) / (self.block_size + 1))
 
-    def __get_mask__(self, idx, mask):
+    def __get_mask__(self, idx, mask, seq_len):
         mask = mask.detach().clone()
         mask = torch.cumsum(mask, 0)
-        mask = torch.where(mask < self.block_size, mask, 0)
+        mask = torch.where(mask < seq_len, mask, 0)
         end_idx = (mask!=0).nonzero(as_tuple=True)[0][-1]
         last_sum = mask[end_idx]
-        add_value = self.block_size - last_sum
+        add_value = seq_len - last_sum
         mask_shifted = torch.roll(mask, shifts=1, dims=0)
         mask_shifted[0] = 0
         mask_shifted[end_idx+1] = 0
@@ -118,30 +118,15 @@ class myDataset(Dataset):
               idxs += now_tokens
               mask.append(len(now_tokens))
 
-            x = idx[:seq_len]
+            x = idxs.detach().clone()
+            x = x[:seq_len]
+            y = idxs.detach().clone()
+            y = y[mask[0]:seq_len]
             mask = torch.tensor(mask)
             seq_len = self.block_size
             x_mask = self.__get_mask__(x, mask, seq_len)
-            y = idx[1:seq_len]
-            seq_len -= mask[0]
-            mask = torch.roll(mask, shifts=-1, dims=0)
-            mask[-1] = 0
-            #(!) --- in progress ---
-            
-
-            
-            
-            
- #self.data = list(chain(*[self.vocab(word, truncation=True, max_length=self.maxlen, add_special_tokens=False)['input_ids'] for word in self.data.split(' ')])) #(!) pre tokenization
-            
-            
-            y = torch.tensor(idxs)
-            y = y[cls_heads[1]:]
-            y = y[1:]
-            y = y[:self.block_size - (cls_heads[1]-cls_heads[0])]
-            y_mask = torch.tensor(x_mask)
-            
-            
+            y_mask = x_mask.detach().clone()
+          
             y = torch.nn.functional.pad(y, (self.block_size - (y.shape)[-1], 0), mode='constant', value=0)
             x_mask = torch.nn.functional.pad(x_mask, (0, self.block_size - (x_mask.shape)[-1]), mode='constant', value=0)
             y_mask = torch.nn.functional.pad(y_mask, (0, self.block_size - (y_mask.shape)[-1]), mode='constant', value=0)
