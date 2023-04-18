@@ -112,21 +112,24 @@ class myDataset(Dataset):
                 idxs = [[self.vocab[_] for _ in word] for word in chunk]
             #mask = torch.tensor([len(_)-1 for _ in x], dtype=torch.long)
     
-            mask = []
-            for word in chunk:
-              now_tokens = self.vocab(word, truncation=True, add_special_tokens=False)['input_ids']
-              idxs += now_tokens
-              mask.append(len(now_tokens))
-
-            x = idxs.detach().clone()
+            chunk_str = " " + " ".join(chunk)
+            
+            idxs = self.vocab(words.truncation=True, add_special_tokens=False)['input_ids']
+            idx_tokens = self.vocab.tokenize(words)
+            head_idxs = [i for i in range(len(idx_tokens)) if ('Ġ' in encode[i])]
+            mask = [(head_idxs[i+1]-head_idxs[i]) for i in range(len(head_idxs)-1)]
+            mask.append(len(idxs)-head_idxs[-1]
+            
+                    
+            x = torch.tensor(idxs)
             x = x[:seq_len]
-            y = idxs.detach().clone()
+            y = torch.tensor(idxs)
             y = y[mask[0]:seq_len]
             mask = torch.tensor(mask)
             seq_len = self.block_size
             x_mask = self.__get_mask__(x, mask, seq_len)
             y_mask = x_mask.detach().clone()
-          
+           
             y = torch.nn.functional.pad(y, (self.block_size - (y.shape)[-1], 0), mode='constant', value=0)
             x_mask = torch.nn.functional.pad(x_mask, (0, self.block_size - (x_mask.shape)[-1]), mode='constant', value=0)
             y_mask = torch.nn.functional.pad(y_mask, (0, self.block_size - (y_mask.shape)[-1]), mode='constant', value=0)
