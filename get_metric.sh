@@ -17,6 +17,7 @@ do
     else
         echo wandb: "$(grep -o 'acc_unit_epoch=.....' $env_file | tail -n1)"
         echo wandb: "$(grep -o 'acc_word_epoch=.....' $env_file | tail -n1)"
+        echo wandb: "$(grep -o 'gpu_epoch=.....' $env_file | tail -n1)"
         echo wandb: killed at "$(grep -o 'Epoch...' $env_file | tail -n1)"
     fi
 

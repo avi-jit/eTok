@@ -14,3 +14,7 @@ slurm-*
 val_output_*
 base_metrics/
 train/
+*.txt
+*.json
+*.out
+REPORT.md

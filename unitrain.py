@@ -48,12 +48,13 @@ def main(
         debug=False,
         LANG="en",
         learning_rate=1e-4,
-        USE_LOGGER="true"
+        USE_LOGGER="true",
+        fixed_context_char_size=150
     ):
     
     if LOAD_CKPT:
         model = myGPT.load_from_checkpoint(LOAD_CKPT, 
-            batch_size=batch_size, lang=LANG, dataset=DATASET, save_to_val_csv=True
+            batch_size=batch_size, lang=LANG, dataset=DATASET, save_to_val_csv=True, fixed_context_char_size=fixed_context_char_size
         )
         block_size = model.config.block_size
         model.to(DEVICE)
@@ -146,7 +147,7 @@ def main(
             log_model_checkpoints=False,
             #name=f"{DATASET} {'-'.join(langs)} {model_type}{model.config.num_prefix} {base} {output_type} {batch_size}bs {block_size}bl"
         )'''   
-        logger = pl.loggers.WandbLogger(project="etok", save_dir='/scratch1/sghaneka/etok/')
+        logger = pl.loggers.WandbLogger(project="etok", save_dir='/scratch1/sghaneka/etok/', settings=wandb.Settings(start_method="fork"))
         # wandb.run.name = f"{DATASET} {'-'.join(langs)} {model_type}{model.config.num_prefix} {base} {output_type} {batch_size}bs {block_size}bl {'-'.join(wandb.run.name.split('-')[:2])}"
         wandb.run.name = f"{'debug_' if debug else ''}{NUM_PREFIX if do_e2e else 'no-e2e'}_{base}_{DATASET}_{LANG}_{logger.experiment.name}_{EPOCHS}ep"
         # logger = CometLogger(api_key=os.environ["COMET_API_KEY"],project_name="etok")
@@ -174,6 +175,7 @@ def main(
             base=full_dataset.base,
             num_prefix=NUM_PREFIX,
             canvas_size=full_dataset.maxlen,
+            fixed_context_char_size=fixed_context_char_size
         )
 
         logger.log_hyperparams(params=model.config)
@@ -256,6 +258,7 @@ if __name__ == "__main__":
     parser.add_argument("--lang", type=str, default='en') # en, gu, hi, zh
     parser.add_argument("--num_epochs", type=int, default=50)
     parser.add_argument("--device", type=int, default=0)
+    parser.add_argument("--fixed_context_char_size", type=int, default=150)
     parser.add_argument("--learning_rate", type=float, default=50)
     parser.add_argument("--block_size", type=int, default=128+64)
     parser.add_argument("--batch_size", type=int, default=2)
@@ -264,10 +267,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
     if args.ckpt == '':
         main(DATASET=args.dataset, DEVICE=args.device, NUM_PREFIX=args.num_prefix, base=args.base, do_e2e=args.e2e, EPOCHS=args.num_epochs, 
-             block_size=args.block_size, batch_size=args.batch_size, debug=False, LANG=args.lang, learning_rate=args.learning_rate)
+             block_size=args.block_size, batch_size=args.batch_size, debug=False, LANG=args.lang, learning_rate=args.learning_rate, fixed_context_char_size=args.fixed_context_char_size)
     else:
         print(args.use_logger)
-        main(LOAD_CKPT=args.ckpt, DATASET=args.dataset, DEVICE=args.device, LANG=args.lang, USE_LOGGER=args.use_logger)
+        main(LOAD_CKPT=args.ckpt, DATASET=args.dataset, DEVICE=args.device, LANG=args.lang, USE_LOGGER=args.use_logger,fixed_context_char_size=args.fixed_context_char_size)
         # main(LOAD_CKPT="/scratch1/sghaneka/etok/etok/ft7nhoax/checkpoints/epoch=76-step=40217.ckpt", DEVICE=args.device, DATASET="shakespeare") # 4sub
         # main(LOAD_CKPT="/scratch1/sghaneka/etok/etok/hwwmln3w/checkpoints/epoch=86-step=45195.ckpt", DEVICE=args.device, DATASET="shakespeare") # 4char
         # main(LOAD_CKPT="/scratch1/sghaneka/etok/etok/ora0kiht/checkpoints/epoch=85-step=44671.ckpt", DEVICE=args.device, DATASET="shakespeare") # 4byte

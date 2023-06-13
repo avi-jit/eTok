@@ -31,6 +31,7 @@ class myGPT(pl.LightningModule):
                  n_e2e_layer=2,
                  resid_pdrop=0.1,
                  attn_pdrop=0.1,
+                 fixed_context_char_size=450,
                  vocab=None,
                  base='char', # 'char' 'sub' 'word' 'byte'
                  canvas_size = 12,
@@ -212,13 +213,18 @@ class myGPT(pl.LightningModule):
         # rev = {k:v for v,k in self.config.vocab.items()}
         logging_batch_idx = -1 
         #self.log('val_loss', self.training_step(batch, batch_idx, eval=True), on_step=False, on_epoch=True, logger=True)
-        context=self.config.canvas_size*2
+        # context=self.config.canvas_size * 2
+        context=self.config.fixed_context_char_size
         max_new_tokens=self.config.canvas_size + 30
         if self.config.base == 'char':
             space_token = 0
         elif self.config.base == 'byte':
             space_token = 35
-            #context=30
+            context= int(context // 0.95) # where 0.95 = avg_char_per_byte
+        elif self.config.base == "sub":
+            context = int(context // 2.62) # where 2.62 = avg_char_per_subword
+        elif self.config.base == "word":
+            context = int(context // 5.68) # where 5.68 = avg_char_per_word
         if self.config.num_prefix == 0 and self.config.base != 'word':
             x,y = batch
             b,l = x.shape
@@ -231,13 +237,23 @@ class myGPT(pl.LightningModule):
                     spaces = (row==space_token).nonzero()
                     ### Place where issue is for other languages
                     last_word_beg, last_word_end = spaces[-2][0], spaces[-1][0]+1 # last full word
-                    inputs[i] = row[last_word_beg - context+1:last_word_beg+1] # +1 to include space
+                    if last_word_beg.item() >= context+1:
+                        inputs[i] = row[last_word_beg - context+1:last_word_beg+1] # +1 to include space
+                    else:
+                        if len(inputs[i]) > len(row[0:last_word_beg+1]):
+                            continue
+                        # inputs[i] = row[0:last_word_beg+1] # +1 to include space
                     answers[i,:last_word_end-last_word_beg-1] = row[last_word_beg+1:last_word_end]
                     lens[i] = last_word_end - last_word_beg -1 # 2. if gt is bank, banker should be wrong.
                 elif self.config.base == 'sub':
                     spaces = (row.unsqueeze(1)==self.news.to(row.device)).any(dim=1).nonzero() # b size boolean, then nonzero
                     last_word_beg, last_word_end = spaces[-2][0], spaces[-1][0] # last full word
-                    inputs[i] = row[last_word_beg - context:last_word_beg]
+                    if last_word_beg.item() >= context+1:
+                        inputs[i] = row[last_word_beg - context:last_word_beg]
+                    else:
+                        if len(inputs[i]) > len(row[0:last_word_beg]):
+                            continue
+                        # inputs[i] = row[0:last_word_beg]
                     answers[i,:last_word_end-last_word_beg] = row[last_word_beg:last_word_end]
                     lens[i] = last_word_end - last_word_beg
             out = self.generate(inputs, max_new_tokens=max_new_tokens, temperature=1.0, do_sample=True, top_k=None)

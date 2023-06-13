@@ -259,10 +259,12 @@ class myDataset(Dataset):
             self.vocab = { w:i for i,w in enumerate(words) }
             self.rev = {k:v for v,k in self.vocab.items()}
         elif base == 'sub':
-            #self.vocab = dict(bpe.vocab)
             self.vocab = AutoTokenizer.from_pretrained("gpt2")
+            # print(f"data has {sum([len(self.vocab.tokenize(i)) for i in self.data.split(' ')])} subwords")
         elif base == 'byte':
-            self.vocab = AutoTokenizer.from_pretrained("google/byt5-small")  
+            self.vocab = AutoTokenizer.from_pretrained("google/byt5-small")
+            # print(f"data has {sum([len(self.vocab.tokenize(i)) for i in self.data.split(' ')])} bytes")
+            # print(f"data has {sum([len(self.vocab.tokenize(i)) for i in data])} bytes")
         if vocab_size == 0:
             if base == 'char':
                 vocab_size = len(chars)
@@ -325,3 +327,41 @@ class myDataset(Dataset):
             x = torch.tensor(idxs[:-1], dtype=torch.long)
             y = torch.tensor(idxs[1:], dtype=torch.long)
             return x, y
+        
+
+class CharDatasetLoader(Dataset):
+    def __init__(self,data, block_size,vocab_size=0):
+        text = data
+        for remove in ['\n','<unk>','=', '@-@']:
+            text = text.replace(remove,' ')
+        text = re.sub(r"(-|{|}:|,|;|\.|\n|!|'|--|\?)",r' \1 ',text)
+        self.data = re.sub(r' +',r' ',text).strip()
+        chars = list(set(text))
+        chars.remove(' '); chars = [' '] + chars # index is 0
+        words = list(set(self.data.split(' ')))
+        print('data has %d characters, %d unique; %d words, %d unique' % (len(data), len(chars), len(self.data.split(' ')), len(words)))
+
+        self.vocab = { ch:i for i,ch in enumerate(chars) }
+        self.rev = {k:v for v,k in self.vocab.items()}
+
+        if vocab_size == 0:
+            vocab_size = len(chars)
+            self.maxlen = max([len(i) for i in words])
+        print(f"{self.maxlen=}")
+        
+        self.block_size = block_size
+
+    def __len__(self):
+        return math.ceil(len(self.data) / (self.block_size + 1))
+    
+    def __getitem__(self, chunk=None):
+        k = 1
+        if not chunk: # can give space-sep (for e2e) or raw text too.
+            i = np.random.randint(0, len(self.data) - (self.block_size + 1)) 
+            # we're actually going to "cheat" and pick a spot in the dataset at random
+            chunk = self.data[i:round(i+k*self.block_size+1)]
+
+        idxs = [self.vocab[_] for _ in chunk]
+        x = torch.tensor(idxs[:-1], dtype=torch.long)
+        y = torch.tensor(idxs[1:], dtype=torch.long)
+        return x, y

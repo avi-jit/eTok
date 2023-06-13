@@ -13,7 +13,8 @@ class Config(BaseModel):
     BATCH_SIZE: int = 2
     EPOCHS: int = 100
     OPENBLAS_NUM_THREADS: int = 3
-    WANDB_API_KEY: str = "c128f18929ff46446a1bdc6cb30e9ca5753167e4"
+    WANDB_API_KEY: str = "c8032f09362a503f2d512fad39cb26bb71eba5ac"
+    WANDB_MODE: str = "offline"
 
 
 ru_config = [
@@ -196,6 +197,104 @@ shakespeare_config = [
     },
 ]
 
+
+# ru_config = [
+#     {
+#         "DATASET": "custom",
+#         "BASE": "byte",
+#         "E2E": "true",
+#         "LANG": "ru",
+#         "NUM_PREFIX": 1
+#     },
+#     {
+#         "DATASET": "custom",
+#         "BASE": "char",
+#         "E2E": "true",
+#         "LANG": "ru",
+#         "NUM_PREFIX": 1
+#     },
+#     {
+#         "DATASET": "custom",
+#         "BASE": "sub",
+#         "E2E": "true",
+#         "LANG": "ru",
+#         "NUM_PREFIX": 1
+#     },
+# ]
+
+# en_config = [
+#     {
+#         "DATASET": "custom",
+#         "BASE": "byte",
+#         "E2E": "true",
+#         "LANG": "en",
+#         "NUM_PREFIX": 1
+#     },
+#     {
+#         "DATASET": "custom",
+#         "BASE": "char",
+#         "E2E": "true",
+#         "LANG": "en",
+#         "NUM_PREFIX": 1
+#     },
+#     {
+#         "DATASET": "custom",
+#         "BASE": "sub",
+#         "E2E": "true",
+#         "LANG": "en",
+#         "NUM_PREFIX": 1
+#     },
+# ]
+
+# fr_config = [
+#     {
+#         "DATASET": "custom",
+#         "BASE": "byte",
+#         "E2E": "true",
+#         "LANG": "fr",
+#         "NUM_PREFIX": 1
+#     },
+#     {
+#         "DATASET": "custom",
+#         "BASE": "char",
+#         "E2E": "true",
+#         "LANG": "fr",
+#         "NUM_PREFIX": 1
+#     },
+#     {
+#         "DATASET": "custom",
+#         "BASE": "sub",
+#         "E2E": "true",
+#         "LANG": "fr",
+#         "NUM_PREFIX": 1
+#     },
+# ]
+
+# shakespeare_config = [
+#     {
+#         "DATASET": "shakespeare",
+#         "BASE": "byte",
+#         "E2E": "true",
+#         "LANG": "en",
+#         "NUM_PREFIX": 1
+#     },
+#     {
+#         "DATASET": "shakespeare",
+#         "BASE": "char",
+#         "E2E": "true",
+#         "LANG": "en",
+#         "NUM_PREFIX": 1
+#     },
+#     {
+#         "DATASET": "shakespeare",
+#         "BASE": "sub",
+#         "E2E": "true",
+#         "LANG": "en",
+#         "NUM_PREFIX": 1
+#     },
+    
+# ]
+
 for config in [*ru_config, *en_config, *fr_config, *shakespeare_config]:
     cfg = Config(**config)
     with open(
@@ -203,10 +302,8 @@ for config in [*ru_config, *en_config, *fr_config, *shakespeare_config]:
         "w",
     ) as f:
         f.write(
-            f"DEVICE={cfg.DEVICE}\nDATASET={cfg.DATASET}\nBASE={cfg.BASE}\nE2E={cfg.E2E}\nLANG={cfg.LANG}\nLEARNING_RATE={cfg.LEARNING_RATE}\nNUM_PREFIX={cfg.NUM_PREFIX}\nBATCH_SIZE={cfg.BATCH_SIZE}\nEPOCHS={cfg.EPOCHS}\nOPENBLAS_NUM_THREADS={cfg.OPENBLAS_NUM_THREADS}\nWANDB_API_KEY={cfg.WANDB_API_KEY}\n"
+            f"WANDB_MODE={cfg.WANDB_MODE}\nDEVICE={cfg.DEVICE}\nDATASET={cfg.DATASET}\nBASE={cfg.BASE}\nE2E={cfg.E2E}\nLANG={cfg.LANG}\nLEARNING_RATE={cfg.LEARNING_RATE}\nNUM_PREFIX={cfg.NUM_PREFIX}\nBATCH_SIZE={cfg.BATCH_SIZE}\nEPOCHS={cfg.EPOCHS}\nOPENBLAS_NUM_THREADS={cfg.OPENBLAS_NUM_THREADS}\nWANDB_API_KEY={cfg.WANDB_API_KEY}\n"
         )
     print(
         f"configs/{cfg.DATASET}_{cfg.LANG}_{cfg.BASE}_{'e2e' if cfg.E2E== 'true' else 'no-e2e'}_{cfg.LEARNING_RATE}_{cfg.NUM_PREFIX}_{cfg.BATCH_SIZE}.env"
     )
-
-#  ( "configs/custom_ru_byte_no-e2e_0.0001_4_2.env" "configs/custom_ru_char_no-e2e_0.0001_4_2.env" "configs/custom_ru_sub_no-e2e_0.0001_4_2.env" "configs/custom_ru_word_no-e2e_0.0001_4_2.env" "configs/custom_ru_byte_e2e_0.0001_4_2.env" "configs/custom_ru_char_e2e_0.0001_4_2.env" "configs/custom_ru_sub_e2e_0.0001_4_2.env" "configs/custom_en_byte_no-e2e_0.0001_4_2.env" "configs/custom_en_char_no-e2e_0.0001_4_2.env" "configs/custom_en_sub_no-e2e_0.0001_4_2.env" "configs/custom_en_word_no-e2e_0.0001_4_2.env" "configs/custom_en_byte_e2e_0.0001_4_2.env" "configs/custom_en_char_e2e_0.0001_4_2.env" "configs/custom_en_sub_e2e_0.0001_4_2.env" "configs/custom_fr_byte_no-e2e_0.0001_4_2.env" "configs/custom_fr_char_no-e2e_0.0001_4_2.env" "configs/custom_fr_sub_no-e2e_0.0001_4_2.env" "configs/custom_fr_word_no-e2e_0.0001_4_2.env" "configs/custom_fr_byte_e2e_0.0001_4_2.env" "configs/custom_fr_char_e2e_0.0001_4_2.env" "configs/custom_fr_sub_e2e_0.0001_4_2.env" "configs/shakespeare_en_byte_no-e2e_0.0001_4_2.env" "configs/shakespeare_en_char_no-e2e_0.0001_4_2.env" "configs/shakespeare_en_sub_no-e2e_0.0001_4_2.env" "configs/shakespeare_en_word_no-e2e_0.0001_4_2.env" "configs/shakespeare_en_byte_e2e_0.0001_4_2.env" "configs/shakespeare_en_char_e2e_0.0001_4_2.env" "configs/shakespeare_en_sub_e2e_0.0001_4_2.env" )

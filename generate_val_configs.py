@@ -209,24 +209,136 @@ class ValConfig(BaseModel):
 #     },
 # ]
 
-configs = [
+# configs = [
+#     {
+#         "DATASET": "custom",
+#         "BASE": "sub",
+#         "E2E": "false",
+#         "LANG": "ru",
+#         "LOAD_CKPT": "/scratch1/sghaneka/etok/etok/jv55t0e3/checkpoints/epoch=65-step=1054614.ckpt",
+#     },
+#     {
+#         "DATASET": "custom",
+#         "BASE": "byte",
+#         "E2E": "true",
+#         "LANG": "fr",
+#         "LOAD_CKPT": "/scratch1/sghaneka/etok/etok/g9qqdj9d/checkpoints/epoch=98-step=317493.ckpt",
+#     },
+#     {
+#         "DATASET": "custom",
+#         "BASE": "sub",
+#         "E2E": "false",
+#         "LANG": "fr",
+#         "LOAD_CKPT": "/scratch1/sghaneka/etok/etok/irdlv048/checkpoints/epoch=44-step=773100.ckpt",
+#     },
+# ]
+
+en_config = [
     {
         "DATASET": "custom",
         "BASE": "byte",
-        "E2E": "false",
+        "E2E": "true",
+        "LANG": "en",
+        "NUM_PREFIX": 1,
+        "LOAD_CKPT": "/scratch1/sghaneka/etok/etok/cl1g3lof/checkpoints/epoch=98-step=275121.ckpt",
+    },
+    {
+        "DATASET": "custom",
+        "BASE": "char",
+        "E2E": "true",
+        "LANG": "en",
+        "NUM_PREFIX": 1,
+        "LOAD_CKPT": "/scratch1/sghaneka/etok/etok/4yu96zr1/checkpoints/epoch=98-step=275121.ckpt",
+    },
+    {
+        "DATASET": "custom",
+        "BASE": "sub",
+        "E2E": "true",
+        "LANG": "en",
+        "NUM_PREFIX": 1,
+        "LOAD_CKPT": "/scratch1/sghaneka/etok/etok/1iqe21wf/checkpoints/epoch=98-step=275121.ckpt",
+    },
+]
+ru_config = [
+    {
+        "DATASET": "custom",
+        "BASE": "byte",
+        "E2E": "true",
         "LANG": "ru",
-        "LOAD_CKPT": "/scratch1/sghaneka/etok/etok/2ravqjw8/checkpoints/epoch=98-step=1581921.ckpt",
+        "NUM_PREFIX": 1,
+        "LOAD_CKPT": "/scratch1/sghaneka/etok/etok/kr79fv4r/checkpoints/epoch=98-step=241956.ckpt",
+    },
+    {
+        "DATASET": "custom",
+        "BASE": "char",
+        "E2E": "true",
+        "LANG": "ru",
+        "NUM_PREFIX": 1,
+        "LOAD_CKPT": "/scratch1/sghaneka/etok/etok/2co9uydt/checkpoints/epoch=98-step=241956.ckpt",
+    },
+    {
+        "DATASET": "custom",
+        "BASE": "sub",
+        "E2E": "true",
+        "LANG": "ru",
+        "NUM_PREFIX": 1,
+        "LOAD_CKPT": "/scratch1/sghaneka/etok/etok/wkqkk5hm/checkpoints/epoch=98-step=241956.ckpt",
+    },
+]
+fr_config = [
+    {
+        "DATASET": "custom",
+        "BASE": "byte",
+        "E2E": "true",
+        "LANG": "fr",
+        "NUM_PREFIX": 1,
+        "LOAD_CKPT": "/scratch1/sghaneka/etok/etok/xodidxfo/checkpoints/epoch=98-step=317493.ckpt",
+    },
+    {
+        "DATASET": "custom",
+        "BASE": "char",
+        "E2E": "true",
+        "LANG": "fr",
+        "NUM_PREFIX": 1,
+        "LOAD_CKPT": "/scratch1/sghaneka/etok/etok/g2s10y2i/checkpoints/epoch=98-step=317493.ckpt",
     },
     {
         "DATASET": "custom",
         "BASE": "sub",
         "E2E": "true",
         "LANG": "fr",
-        "LOAD_CKPT": "/scratch1/sghaneka/etok/etok/kmxdnftd/checkpoints/epoch=98-step=317493.ckpt",
+        "NUM_PREFIX": 1,
+        "LOAD_CKPT": "/scratch1/sghaneka/etok/etok/18p235hk/checkpoints/epoch=98-step=317493.ckpt",
+    },
+]
+shakespeare_config =[
+        {
+        "DATASET": "shakespeare",
+        "BASE": "byte",
+        "E2E": "true",
+        "LANG": "en",
+        "NUM_PREFIX": 1,
+        "LOAD_CKPT": "/scratch1/sghaneka/etok/etok/e4ygj4ju/checkpoints/epoch=98-step=51876.ckpt",
+    },
+    {
+        "DATASET": "shakespeare",
+        "BASE": "char",
+        "E2E": "true",
+        "LANG": "en",
+        "NUM_PREFIX": 1,
+        "LOAD_CKPT": "/scratch1/sghaneka/etok/etok/s3havshd/checkpoints/epoch=98-step=51876.ckpt",
+    },
+    {
+        "DATASET": "shakespeare",
+        "BASE": "sub",
+        "E2E": "true",
+        "LANG": "en",
+        "NUM_PREFIX": 1,
+        "LOAD_CKPT": "/scratch1/sghaneka/etok/etok/z0knaycl/checkpoints/epoch=98-step=51876.ckpt",
     },
 ]
 
-for config in [*configs]:
+for config in [*en_config, *ru_config, *fr_config, *shakespeare_config]:
     cfg = ValConfig(**config)
     with open(
         f"configs/val_{cfg.DATASET}_{cfg.LANG}_{cfg.BASE}_{'e2e' if cfg.E2E== 'true' else 'no-e2e'}_{cfg.LEARNING_RATE}_{cfg.NUM_PREFIX}_{cfg.BATCH_SIZE}.env",
