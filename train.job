@@ -38,11 +38,11 @@ fi
 
 source train/bin/activate
 
-echo -e "=======================\nTraining using following config:\n- Dataset: '$DATASET-$LANG'\n- Base: '$BASE'\n- E2E: '$E2E'\n- Prefix: '$NUM_PREFIX'\n- Batch Size: '$BATCH_SIZE'\n- Learning Rate: '$LEARNING_RATE'\n- Epochs: '$EPOCHS'\n======================="
+echo -e "=======================\nTraining using following config:\n- Dataset: '$DATASET-$LANG'\n- Base: '$BASE'\n- E2E: '$E2E'\n- Report Numeracy: '$REPORT_NUMERACY'\n- Prefix: '$NUM_PREFIX'\n- Batch Size: '$BATCH_SIZE'\n- Learning Rate: '$LEARNING_RATE'\n- Epochs: '$EPOCHS'\n======================="
 
 if [ "$E2E" = true ]
 then
-    python unitrain.py -dataset $DATASET -base $BASE --e2e --device $DEVICE --lang $LANG --learning_rate $LEARNING_RATE --num_prefix $NUM_PREFIX --batch_size $BATCH_SIZE --num_epochs $EPOCHS
+    python unitrain.py -dataset $DATASET -base $BASE --e2e --device $DEVICE --lang $LANG --learning_rate $LEARNING_RATE --num_prefix $NUM_PREFIX --batch_size $BATCH_SIZE --num_epochs $EPOCHS --report_numeracy $REPORT_NUMERACY
 else
-    python unitrain.py -dataset $DATASET -base $BASE --no-e2e --device $DEVICE --lang $LANG --learning_rate $LEARNING_RATE --num_prefix $NUM_PREFIX --batch_size $BATCH_SIZE --num_epochs $EPOCHS
+    python unitrain.py -dataset $DATASET -base $BASE --no-e2e --device $DEVICE --lang $LANG --learning_rate $LEARNING_RATE --num_prefix $NUM_PREFIX --batch_size $BATCH_SIZE --num_epochs $EPOCHS --report_numeracy $REPORT_NUMERACY
 fi

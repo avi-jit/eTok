@@ -10,10 +10,12 @@ class ValConfig(BaseModel):
     BASE: Literal["byte", "char", "sub", "word"]
     E2E: Literal["true", "false"]
     USE_LOGGER: Literal["true", "false"] = "false"
+    REPORT_NUMERACY: Literal["true", "false"] = "false"
     LEARNING_RATE: float = 1e-4
     NUM_PREFIX: int = 4
     BATCH_SIZE: int = 2
     OPENBLAS_NUM_THREADS: int = 3
+
 
 # en_config = [
 #     {
@@ -311,8 +313,8 @@ fr_config = [
         "LOAD_CKPT": "/scratch1/sghaneka/etok/etok/18p235hk/checkpoints/epoch=98-step=317493.ckpt",
     },
 ]
-shakespeare_config =[
-        {
+shakespeare_config = [
+    {
         "DATASET": "shakespeare",
         "BASE": "byte",
         "E2E": "true",
@@ -341,12 +343,12 @@ shakespeare_config =[
 for config in [*en_config, *ru_config, *fr_config, *shakespeare_config]:
     cfg = ValConfig(**config)
     with open(
-        f"configs/val_{cfg.DATASET}_{cfg.LANG}_{cfg.BASE}_{'e2e' if cfg.E2E== 'true' else 'no-e2e'}_{cfg.LEARNING_RATE}_{cfg.NUM_PREFIX}_{cfg.BATCH_SIZE}.env",
+        f"configs/val_{cfg.DATASET}_{cfg.LANG}_{cfg.BASE}_{'e2e' if cfg.E2E== 'true' else 'no-e2e'}_{cfg.REPORT_NUMERACY}_{cfg.LEARNING_RATE}_{cfg.NUM_PREFIX}_{cfg.BATCH_SIZE}.env",
         "w",
     ) as f:
         f.write(
-            f"DEVICE={cfg.DEVICE}\nDATASET={cfg.DATASET}\nLOAD_CKPT={cfg.LOAD_CKPT}\nLANG={cfg.LANG}\nOPENBLAS_NUM_THREADS={cfg.OPENBLAS_NUM_THREADS}\nUSE_LOGGER={cfg.USE_LOGGER}"
+            f"DEVICE={cfg.DEVICE}\nDATASET={cfg.DATASET}\nLOAD_CKPT={cfg.LOAD_CKPT}\nLANG={cfg.LANG}\nREPORT_NUMERACY={cfg.REPORT_NUMERACY}\nOPENBLAS_NUM_THREADS={cfg.OPENBLAS_NUM_THREADS}\nUSE_LOGGER={cfg.USE_LOGGER}"
         )
     print(
-        f"configs/val_{cfg.DATASET}_{cfg.LANG}_{cfg.BASE}_{'e2e' if cfg.E2E== 'true' else 'no-e2e'}_{cfg.LEARNING_RATE}_{cfg.NUM_PREFIX}_{cfg.BATCH_SIZE}.env"
+        f"configs/val_{cfg.DATASET}_{cfg.LANG}_{cfg.BASE}_{'e2e' if cfg.E2E== 'true' else 'no-e2e'}_{cfg.REPORT_NUMERACY}_{cfg.LEARNING_RATE}_{cfg.NUM_PREFIX}_{cfg.BATCH_SIZE}.env"
     )

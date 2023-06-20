@@ -5,7 +5,7 @@ from lingua import Language, LanguageDetectorBuilder
 
 # lang = 'zh'
 # ds = set()
-# for i,row in tqdm(enumerate(datasets.load_dataset(f"squad_kor_v2", 
+# for i,row in tqdm(enumerate(datasets.load_dataset(f"squad_kor_v2",
 #      split="train", streaming=True, use_auth_token="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"))):
 #     ds.add(row['context'])
 
@@ -20,7 +20,7 @@ from lingua import Language, LanguageDetectorBuilder
 # clean_ds = [sentence[result.start_index:result.end_index] for sentence in tqdm(ds) for result in detector.detect_multiple_languages_of(sentence) if result.language.name == "CHINESE"]
 
 # with open(f'clean_{lang}.txt', mode='wt', encoding='utf-8') as myfile:
-#     for sentence in tqdm(clean_ds):  
+#     for sentence in tqdm(clean_ds):
 #         clean_string_1 = re.sub("[A-Za-z]","",sentence)
 #         myfile.write(re.sub(r'[-~].*', '', clean_string_1).replace("\n", "").strip())
 #         myfile.write("\n")
@@ -34,11 +34,11 @@ from lingua import Language, LanguageDetectorBuilder
 #                 myfile.write(re.sub("\(\)", "", clean_string_1).replace("\n", "").strip())
 #                 myfile.write("\n")
 
-        # clean_string = sentence.replace("\n", "").strip()
-        # myfile.write(clean_string)
-        # myfile.write("\n")
+# clean_string = sentence.replace("\n", "").strip()
+# myfile.write(clean_string)
+# myfile.write("\n")
 
-with open("/home1/sghaneka/datasets_for_etok/ru_10000.txt", 'w') as out_file:
+with open("/home1/sghaneka/datasets_for_etok/ru_10000.txt", "w") as out_file:
     with open("/home1/sghaneka/datasets_for_etok/data/ru.txt") as in_file:
         count = 0
         for line in in_file:

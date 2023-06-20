@@ -38,6 +38,6 @@ fi
 
 source train/bin/activate
 
-echo -e "=======================\Validating using following config:\n- Dataset: '$DATASET-$LANG'\n- CKPT_PATH: '$LOAD_CKPT'\n======================="
+echo -e "=======================\Validating using following config:\n- Dataset: '$DATASET-$LANG'\n- Report Numeracy: '$REPORT_NUMERACY'\n- CKPT_PATH: '$LOAD_CKPT'\n======================="
 
-python unitrain.py -dataset $DATASET --device $DEVICE --lang $LANG --ckpt $LOAD_CKPT --use_logger $USE_LOGGER
+python unitrain.py -dataset $DATASET --device $DEVICE --lang $LANG --ckpt $LOAD_CKPT --use_logger $USE_LOGGER --report_numeracy $REPORT_NUMERACY

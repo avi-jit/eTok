@@ -4,17 +4,20 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
+
 def set_seed(seed):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
+
 def top_k_logits(logits, k):
     v, ix = torch.topk(logits, k)
     out = logits.clone()
-    out[out < v[:, [-1]]] = -float('Inf')
+    out[out < v[:, [-1]]] = -float("Inf")
     return out
+
 
 @torch.no_grad()
 def sample(model, x, steps, temperature=1.0, sample=False, top_k=None):
@@ -27,7 +30,9 @@ def sample(model, x, steps, temperature=1.0, sample=False, top_k=None):
     block_size = model.get_block_size()
     model.eval()
     for k in range(steps):
-        x_cond = x if x.size(1) <= block_size else x[:, -block_size:] # crop context if needed
+        x_cond = (
+            x if x.size(1) <= block_size else x[:, -block_size:]
+        )  # crop context if needed
         logits = model(x_cond)
         # pluck the logits at the final step and scale by temperature
         logits = logits[:, -1, :] / temperature

@@ -233,3 +233,26 @@ slurm_logs/result_2_logs/slurm-14213956.out
 slurm_logs/result_2_logs/slurm-14213957.out
 
 sh get_metric.sh "slurm-15043127.out" "slurm-15043128.out" "slurm-15043129.out"
+
+sh train_config.sh "configs/wiki-convert_en_byte_no-e2e_true_0.0001_4_2.env" "configs/wiki-convert_en_char_no-e2e_true_0.0001_4_2.env" "configs/wiki-convert_en_sub_no-e2e_true_0.0001_4_2.env" "configs/wiki-convert_en_word_no-e2e_true_0.0001_4_2.env" "configs/wiki-convert_en_byte_e2e_true_0.0001_4_2.env" "configs/wiki-convert_en_char_e2e_true_0.0001_4_2.env" "configs/wiki-convert_en_sub_e2e_true_0.0001_4_2.env"
+
+Submitting job with configs/wiki-convert_en_byte_no-e2e_true_0.0001_4_2.env
+Submitted batch job 15329714
+
+Submitting job with configs/wiki-convert_en_char_no-e2e_true_0.0001_4_2.env
+Submitted batch job 15329715
+
+Submitting job with configs/wiki-convert_en_sub_no-e2e_true_0.0001_4_2.env
+Submitted batch job 15329716
+
+Submitting job with configs/wiki-convert_en_word_no-e2e_true_0.0001_4_2.env
+Submitted batch job 15329717
+
+Submitting job with configs/wiki-convert_en_byte_e2e_true_0.0001_4_2.env
+Submitted batch job 15329718
+
+Submitting job with configs/wiki-convert_en_char_e2e_true_0.0001_4_2.env
+Submitted batch job 15329719
+
+Submitting job with configs/wiki-convert_en_sub_e2e_true_0.0001_4_2.env
+Submitted batch job 15329720
